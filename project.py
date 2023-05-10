@@ -275,7 +275,7 @@ if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device}...")
 
-    baseline_model = BaselineModel(args.dropout)
+    model = BaselineModel(args.dropout)
 
     history = ph.register(
         "history",
@@ -294,15 +294,15 @@ if __name__ == "__main__":
     if args.load:
         print("Loading model from file...")
         model_path = get_path(folder_path, MODEL_FILENAME, args.load[1])
-        baseline_model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path))
         print(f"Test loss: {test_loss}")
 
     if num_epochs > 0:
         print(f"Training the network for {num_epochs}...")
         loss_function = nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(baseline_model.parameters(), lr=.001, momentum=.9)
+        optimizer = torch.optim.SGD(model.parameters(), lr=.001, momentum=.9)
         for epoch in tqdm(range(num_epochs), total=num_epochs):
-            baseline_model.train()
+            model.train()
 
             for index, (images, labels) in tqdm(enumerate(trainloader), total=num_batches, leave=False):
                 images = images.to(device)
@@ -310,16 +310,16 @@ if __name__ == "__main__":
 
                 optimizer.zero_grad()
 
-                prediction = baseline_model(images)
+                prediction = model(images)
                 current_loss = loss_function(prediction, labels)
                 current_loss.backward()
                 optimizer.step()
 
             with torch.no_grad():
-                baseline_model.eval()
+                model.eval()
 
-                val_loss, val_acc, _val_acc_per_class = compute_metrics(baseline_model, valloader)
-                train_loss, train_acc, _train_acc_per_class = compute_metrics(baseline_model, trainloader)
+                val_loss, val_acc, _val_acc_per_class = compute_metrics(model, valloader)
+                train_loss, train_acc, _train_acc_per_class = compute_metrics(model, trainloader)
 
                 history['train_acc'].append(train_acc)
                 history['train_loss'].append(train_loss)
@@ -332,7 +332,7 @@ if __name__ == "__main__":
             if (epoch + 1) % args.save_every == 0:
                 tqdm.write(f'Saving the model after epoch: {epoch + 1}...')
                 model_path = get_path(folder_path, MODEL_FILENAME, epoch + 1)
-                torch.save(baseline_model.state_dict(), model_path)
+                torch.save(model.state_dict(), model_path)
 
                 tqdm.write(f'Generating plots after epoch: {epoch + 1}...')
                 plotpath = get_path(folder_path, PLOT_FILENAME, epoch + 1)
@@ -340,8 +340,8 @@ if __name__ == "__main__":
 
                 # Testing the network
                 tqdm.write(f'Testing the network after epoch: {epoch + 1}...')
-                baseline_model.eval()
-                test_loss, test_acc, _test_acc_per_class = compute_metrics(baseline_model, testloader)
+                model.eval()
+                test_loss, test_acc, _test_acc_per_class = compute_metrics(model, testloader)
                 tqdm.write(f"Test loss: {test_loss}, Test accuracy: {test_acc}")
                 tqdm.write(json.dumps(_test_acc_per_class))
 
