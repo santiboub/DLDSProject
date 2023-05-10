@@ -163,6 +163,16 @@ class PickleHelper:
     def update(self, key, value):
         self.pickled[key] = value
 
+    def register(self, key, value):
+        if self.has_loaded:
+            if key in self.pickled:
+                return self.pickled[key]
+            else:
+                sys.stderr.write(f"{key} not in dict, returning value instead\n")
+                return value
+        self.update(key, value)
+        return value
+
     def save(self, path=None):
         if path is None:
             path = self.filename
@@ -236,14 +246,6 @@ if __name__ == "__main__":
         folder_path = folder_helper("trained_models")
         ph = PickleHelper(get_path(folder_path, PICKLE_FILENAME, min(args.n_epochs, args.save_every)))
 
-    history = {
-        "train_loss": [],
-        "train_acc": [],
-        "val_loss": [],
-        "val_acc": []
-    }
-    test_loss, test_acc, _test_acc_per_class = (None, None, None)
-
     trainset, valset, testset, trainloader, valloader, testloader, classes = load_data()
 
     showImages = False
@@ -263,7 +265,19 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device}...")
+
     model = BaselineModel(args.dropout)
+
+    history = ph.register(
+        "history",
+        {
+            "train_loss": [],
+            "train_acc": [],
+            "val_loss": [],
+            "val_acc": []
+        }
+    )
+    test_loss, test_acc, _test_acc_per_class = ph.register("test_performance", (None, None, None))
 
     num_epochs = args.n_epochs
     offset_epochs = 0
