@@ -90,7 +90,7 @@ def plot_curves(ax, train, val, name):
     ax.set_ylabel(name)
     ax.legend()
 
-def summarize_diagnostics2(plotpath, history):
+def summarize_diagnostics(plotpath, history):
     fig, axs = plt.subplots(2, 1)
 
     plot_curves(axs[0], history['train_loss'], history['val_loss'], 'Loss')
@@ -99,19 +99,6 @@ def summarize_diagnostics2(plotpath, history):
     plt.tight_layout()
     plt.savefig(plotpath)
 
-def summarize_diagnostics(history):
-    fig, axs = plt.subplots(2, 1)
-
-    axs[0].set_title('Cross Entropy Loss')
-    axs[0].plot(history['train_loss'], color='blue', label='train')
-    axs[0].plot(history['val_loss'], color='orange', label='test')
-
-    axs[1].set_title('Classification Accuracy')
-    axs[1].plot(history['train_acc'], color='blue', label='train')
-    axs[1].plot(history['val_acc'], color='orange', label='test')
-
-    plt.savefig("wat.pdf")
-    
 def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
     running_loss = 0
     
@@ -336,7 +323,7 @@ if __name__ == "__main__":
 
                 tqdm.write(f'Generating plots after epoch: {epoch + 1}...')
                 plotpath = get_path(folder_path, PLOT_FILENAME, epoch + 1)
-                summarize_diagnostics2(plotpath, history)
+                summarize_diagnostics(plotpath, history)
 
                 # Testing the network
                 tqdm.write(f'Testing the network after epoch: {epoch + 1}...')
