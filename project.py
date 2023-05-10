@@ -18,7 +18,7 @@ import random
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
-PLOT_FILENAME = "baseline.eps"
+PLOT_FILENAME = "baseline.pdf"
 
 torch.manual_seed(30)
 random.seed(30)
@@ -288,6 +288,10 @@ if __name__ == "__main__":
         epochs = int(args.load[1])
         model_path = get_path(folder_path, MODEL_FILENAME, epochs)
         model.load_state_dict(torch.load(model_path))
+
+        plot_path = get_path(folder_path, PLOT_FILENAME, epochs)
+        summarize_diagnostics(plot_path, history)
+
         print(f"Test loss: {test_loss}")
         offset_epochs = epochs
         num_epochs += epochs
