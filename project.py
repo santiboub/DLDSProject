@@ -279,7 +279,7 @@ if __name__ == "__main__":
         num_epochs += epochs
 
     if num_epochs - offset_epochs > 0:
-        print(f"Training the network for {num_epochs}...")
+        print(f"Training the network for {num_epochs - offset_epochs} {'more epochs' if offset_epochs > 0 else ''}...")
         loss_function = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(model.parameters(), lr=.001, momentum=.9)
         for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs):
