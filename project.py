@@ -1,3 +1,10 @@
+import argparse
+import json
+import os.path
+import pickle
+import sys
+import time
+
 import torch
 import torch.nn as nn
 import torchvision
@@ -9,17 +16,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import random
 
+MODEL_FILENAME = "baseline_model.pth"
+PICKLE_FILENAME = "data.pickle"
+PLOT_FILENAME = "baseline.eps"
 
 torch.manual_seed(30)
 random.seed(30)
 np.random.seed(30)
 
 class BaselineModel(nn.Module):
-
-    
     def __init__(self, dropout=0):
         super(BaselineModel, self).__init__()
-
         def init_weights(m):
             if isinstance(m, (nn.Conv2d, nn.Linear)):
                 nn.init.kaiming_uniform_(m.weight)  
@@ -83,14 +90,14 @@ def plot_curves(ax, train, val, name):
     ax.set_ylabel(name)
     ax.legend()
 
-def summarize_diagnostics2(history):
+def summarize_diagnostics2(plotpath, history):
     fig, axs = plt.subplots(2, 1)
 
     plot_curves(axs[0], history['train_loss'], history['val_loss'], 'Loss')
     plot_curves(axs[1], history['train_acc'], history['val_acc'], 'Accuracy')
 
     plt.tight_layout()
-    plt.savefig('baseline.eps')
+    plt.savefig(plotpath)
 
 def summarize_diagnostics(history):
     fig, axs = plt.subplots(2, 1)
@@ -154,32 +161,102 @@ def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
         #print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
     
     return network_loss, network_accuracy, accuracy_per_class
-    
-if __name__ == "__main__":
-    batch_size = 100
-    validation_size = 5000
 
+
+class PickleHelper:
+    def __init__(self, filename):
+        self.pickled = {}
+        self.filename = filename
+        self.has_loaded = False
+
+        if os.path.exists(filename):
+            self.load()
+            self.has_loaded = True
+
+    def update(self, key, value):
+        self.pickled[key] = value
+
+    def register(self, key, value):
+        if self.has_loaded:
+            if key in self.pickled:
+                return self.pickled[key]
+            else:
+                sys.stderr.write(f"{key} not in dict, returning value instead\n")
+                return value
+        self.update(key, value)
+        return value
+
+    def save(self, path=None):
+        if path is None:
+            path = self.filename
+        with open(path, "wb") as file:
+            pickle.dump(self.pickled, file, 2)
+
+    def load(self):
+        with open(self.filename, "rb") as file:
+            self.pickled = pickle.load(file)
+
+def folder_helper(folderpath):
+    if not os.path.exists(folderpath):
+        os.makedirs(folderpath)
+
+    time_str = time.strftime("%Y%m%d-%H%M%S")
+    nested_path = os.path.join(folderpath, time_str)
+    if not os.path.exists(nested_path):
+        os.makedirs(nested_path)
+
+    return nested_path
+
+def get_path(folderpath, filename, epoch):
+    epoch_path = os.path.join(folderpath, str(epoch))
+    if not os.path.exists(epoch_path):
+        os.makedirs(epoch_path)
+    return os.path.join(epoch_path, filename)
+
+def load_data():
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                             transform=transforms.ToTensor(),
                                             download=True)
-
     testset = torchvision.datasets.CIFAR10(root='./data', train=False,
                                             transform=transforms.ToTensor(),
                                             download=True)
-
     trainset, valset = torch.utils.data.random_split(trainset, [len(trainset) - validation_size, validation_size])
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
                                             shuffle=True, num_workers=2)
-
-    valLoader = torch.utils.data.DataLoader(valset, batch_size=batch_size,
+    valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size,
                                             shuffle=False, num_workers=2)
-
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                             shuffle=False, num_workers=2)
 
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-    
+
+    return trainset, valset, testset, trainloader, valloader, testloader, classes
+
+if __name__ == "__main__":
+    batch_size = 100
+    validation_size = 5000
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-l", "--load", nargs=2, metavar=("folderpath", "epoch"), help="Load data from folder")
+    parser.add_argument("-d", "--dropout", type=float, default=0.0, help="Dropout probability")
+    parser.add_argument("-e", "--n_epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
+    args = parser.parse_args()
+
+    if args.load:
+        folder_path = args.load[0]
+        epoch = args.load[1]
+        pickle_path = get_path(folder_path, PICKLE_FILENAME, epoch)
+        if not os.path.exists(pickle_path):
+            raise Exception(f"File {pickle_path} does not exist")
+        ph = PickleHelper(pickle_path)
+    else:
+        folder_path = folder_helper("trained_models")
+        ph = PickleHelper(get_path(folder_path, PICKLE_FILENAME, min(args.n_epochs, args.save_every)))
+
+    trainset, valset, testset, trainloader, valloader, testloader, classes = load_data()
+
     showImages = False
     if showImages:
         def imshow(img):
@@ -196,69 +273,79 @@ if __name__ == "__main__":
         print(' '.join(f'{classes[labels[j]]:5s} {chr(10) if (j % 8)==7 else ""}' for j in range(batch_size)))
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print(f"Using {device} for training...")
-    
+    print(f"Using {device}...")
 
-    baseline_model = BaselineModel()
+    baseline_model = BaselineModel(args.dropout)
 
-    loss_function = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(baseline_model.parameters(), lr=.001, momentum=.9)
+    history = ph.register(
+        "history",
+        {
+            "train_loss": [],
+            "train_acc": [],
+            "val_loss": [],
+            "val_acc": []
+        }
+    )
+    test_loss, test_acc, _test_acc_per_class = ph.register("test_performance", (None, None, None))
 
-    # num_epochs = 50
-    num_epochs = 10
-
+    num_epochs = args.n_epochs
     num_batches = int(len(trainset) / batch_size)
 
-    history = {
-        "train_loss": [],
-        "train_acc": [],
-        "val_loss": [],
-        "val_acc": []
-    }
+    if args.load:
+        print("Loading model from file...")
+        model_path = get_path(folder_path, MODEL_FILENAME, args.load[1])
+        baseline_model.load_state_dict(torch.load(model_path))
+        print(f"Test loss: {test_loss}")
 
-    print(f"Training the network for {num_epochs}...")
-    for epoch in tqdm(range(num_epochs), total=num_epochs):              
-        baseline_model.train()
+    if num_epochs > 0:
+        print(f"Training the network for {num_epochs}...")
+        loss_function = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(baseline_model.parameters(), lr=.001, momentum=.9)
+        for epoch in tqdm(range(num_epochs), total=num_epochs):
+            baseline_model.train()
 
-        for index, (images, labels) in tqdm(enumerate(trainloader), total=num_batches, leave=False):
-            # print(f"Training on batch {index} of {int(len(trainset) / batch_size)}", end="\r")
-            images = images.to(device)
-            labels = labels.to(device)
+            for index, (images, labels) in tqdm(enumerate(trainloader), total=num_batches, leave=False):
+                images = images.to(device)
+                labels = labels.to(device)
 
-            optimizer.zero_grad()
+                optimizer.zero_grad()
 
-            prediction = baseline_model(images)
-            current_loss = loss_function(prediction, labels)
-            current_loss.backward()
-            optimizer.step()
+                prediction = baseline_model(images)
+                current_loss = loss_function(prediction, labels)
+                current_loss.backward()
+                optimizer.step()
 
-            # train_loss_sum += current_loss.detach().item()
-        
-        with torch.no_grad():
-            baseline_model.eval()
-            
-            val_loss, val_acc, _val_acc_per_class = compute_metrics(baseline_model, valLoader)
-            train_loss, train_acc, _train_acc_per_class = compute_metrics(baseline_model, trainloader)
+            with torch.no_grad():
+                baseline_model.eval()
 
-            history['train_acc'].append(train_acc)
-            history['train_loss'].append(train_loss)
-            history['val_acc'].append(val_acc)
-            history['val_loss'].append(val_loss)
-         
-            if epoch % 2 == 0:
-                tqdm.write(f"Training loss: {train_loss}, Validation loss: {val_loss}")
-        
+                val_loss, val_acc, _val_acc_per_class = compute_metrics(baseline_model, valloader)
+                train_loss, train_acc, _train_acc_per_class = compute_metrics(baseline_model, trainloader)
 
-    print('Saving the model...')
-    torch.save(baseline_model.state_dict(), "./trained_models/baseline_model.pth")
+                history['train_acc'].append(train_acc)
+                history['train_loss'].append(train_loss)
+                history['val_acc'].append(val_acc)
+                history['val_loss'].append(val_loss)
 
-    print('Generating plots...')
-    summarize_diagnostics2(history)
+                if epoch % 2 == 0:
+                    tqdm.write(f"Training loss: {train_loss}, Validation loss: {val_loss}")
 
+            if (epoch + 1) % args.save_every == 0:
+                tqdm.write(f'Saving the model after epoch: {epoch + 1}...')
+                model_path = get_path(folder_path, MODEL_FILENAME, epoch + 1)
+                torch.save(baseline_model.state_dict(), model_path)
 
-    # Testing the network
-    print('Testing the network...')
-    baseline_model.eval()
-    test_loss, test_acc, _test_acc_per_class = compute_metrics(baseline_model, testloader)
-    print(f"Test loss: {test_loss}, Test accuracy: {test_acc}")
-    print(_test_acc_per_class)
+                tqdm.write(f'Generating plots after epoch: {epoch + 1}...')
+                plotpath = get_path(folder_path, PLOT_FILENAME, epoch + 1)
+                summarize_diagnostics2(plotpath, history)
+
+                # Testing the network
+                tqdm.write(f'Testing the network after epoch: {epoch + 1}...')
+                baseline_model.eval()
+                test_loss, test_acc, _test_acc_per_class = compute_metrics(baseline_model, testloader)
+                tqdm.write(f"Test loss: {test_loss}, Test accuracy: {test_acc}")
+                tqdm.write(json.dumps(_test_acc_per_class))
+
+                ph.update("history", history)
+                ph.update("test_performance", (test_loss, test_acc, _test_acc_per_class))
+                pickle_path = get_path(folder_path, PICKLE_FILENAME, epoch + 1)
+                ph.save(path=pickle_path)
