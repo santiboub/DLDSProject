@@ -225,7 +225,11 @@ if __name__ == "__main__":
     validation_size = 5000
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-l", "--load", nargs=2, metavar=("folderpath", "epoch"), help="Load data from folder")
+    model_group = parser.add_mutually_exclusive_group()
+    model_group.add_argument('--baseline_model', action='store_true', default=True, help='Use baseline model')
+    model_group.add_argument('--other_model', action='store_true', help='Use other model')
+
+    parser.add_argument("-l", "--load", nargs=2, metavar=("FOLDERPATH", "EPOCH"), help="Load data from folder")
     parser.add_argument("-d", "--dropout", type=float, default=0.0, help="Dropout probability")
     parser.add_argument("-e", "--n_epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
@@ -276,19 +280,23 @@ if __name__ == "__main__":
     test_loss, test_acc, _test_acc_per_class = ph.register("test_performance", (None, None, None))
 
     num_epochs = args.n_epochs
+    offset_epochs = 0
     num_batches = int(len(trainset) / batch_size)
 
     if args.load:
         print("Loading model from file...")
-        model_path = get_path(folder_path, MODEL_FILENAME, args.load[1])
+        epochs = int(args.load[1])
+        model_path = get_path(folder_path, MODEL_FILENAME, epochs)
         model.load_state_dict(torch.load(model_path))
         print(f"Test loss: {test_loss}")
+        offset_epochs = epochs
+        num_epochs += epochs
 
-    if num_epochs > 0:
+    if num_epochs - offset_epochs > 0:
         print(f"Training the network for {num_epochs}...")
         loss_function = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(model.parameters(), lr=.001, momentum=.9)
-        for epoch in tqdm(range(num_epochs), total=num_epochs):
+        for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs):
             model.train()
 
             for index, (images, labels) in tqdm(enumerate(trainloader), total=num_batches, leave=False):
