@@ -211,21 +211,20 @@ def get_path(folderpath, filename, epoch):
     return os.path.join(epoch_path, filename)
 
 def load_data(apply_augmentation=False, norm_m0_sd1=False):    
+    
     transform = transforms.Compose([
         transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
         transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
+        transforms.ToTensor()
     ])
 
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            transform=transform if apply_augmentation else transforms.ToTensor(),
-                                            download=True)
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, transform=transforms.ToTensor(), download=True)
 
     if norm_m0_sd1:
-        # train_mean = trainset.mean(axis=(0,1,2))
-        train_mean = trainset.data.mean(axis=(0,1,2))
-        train_std = trainset.data.std(axis=(0,1,2))
- 
+
+        train_mean = trainset.data.mean(axis=(0,1,2)) / 255
+        train_std = trainset.data.std(axis=(0,1,2)) / 255 
+
         transform_norm_aug = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(train_mean, train_std),
@@ -235,7 +234,7 @@ def load_data(apply_augmentation=False, norm_m0_sd1=False):
 
         transform_norm = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(train_mean, train_std),
+            transforms.Normalize(train_mean, train_std)
         ])
 
         trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
@@ -245,7 +244,13 @@ def load_data(apply_augmentation=False, norm_m0_sd1=False):
         testset = torchvision.datasets.CIFAR10(root='./data', train=False,
                                                 transform=transform_norm,
                                                 download=True)
+               
     else:
+
+        trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                            transform=transform if apply_augmentation else transforms.ToTensor(),
+                                            download=True)
+
         testset = torchvision.datasets.CIFAR10(root='./data', train=False,
                                                 transform=transforms.ToTensor(),
                                                 download=True)
@@ -272,9 +277,6 @@ if __name__ == "__main__":
     model_group.add_argument('--baseline_model', action='store_true', default=True, help='Use baseline model')
     model_group.add_argument('--other_model', action='store_true', help='Use other model')
 
-    scheduler_group = parser.add_mutually_exclusive_group()
-    scheduler_group.add_argument('--lr_scheduler_default', action='store_true', default=True, help="learning rate scheduler: using a constant fixed learning rate")
-
     parser.add_argument("-s", "--scheduler", choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts"],
                     default="default", help="Select a mode")
 
@@ -288,6 +290,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
     parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
     parser.add_argument("-n", "--norm_m0_sd1", action="store_true", help="Normalize to have 0 mean and standard deviation 1")
+
     parser.add_argument("-ad", "--adam", action="store_true", help="Use Adam optimizer")
     parser.add_argument("-aw", "--adamw", action="store_true", help="Use AdamW optimizer")
     args = parser.parse_args()
@@ -296,33 +299,41 @@ if __name__ == "__main__":
     # -l trained_models/20230517-095003 50 -e 50 --save_every 2 -d 0.2
 
     # Already done
-    # -e 50 --save_every 2 # baseline, Viktor | Baseline: 73.xxxxx%  
+    # -e 100 --save_every 2 # baseline, Viktor | Baseline: 73.xxxxx%  
     # -e 100 --save_every 2 -d 0.2 # baseline + dropout, Viktor | Baseline + Dropout: 83.450%  
     # -e 50 --save_every 2 -w 0.001 # baseline + weight decay, Santi  | Baseline + Weight Decay: 72.550% Model = "trained_models/20230517-081045_w0_001"
     # Baseline + Increasing Dropout: 84.690%
-    # -e 50 --save_every 2 -d 0.2 -id 0.1 # baseline + dropout + increased dropout, Santi - Colab 
     
+    # -e 50 --save_every 2 -a, # baseline + augmentation, Theo | Baseline + Data Augmentation: 84.470% 
+    # --e 200 --save_every 2 -d 0.2 -a  Baseline + Dropout + Data Augmentation: 85.880%, Viktor
     
     # In progress:
-    # -e 50 --save_every 2 -a, # baseline + augmentation, Theo | Baseline + Data Augmentation: 84.470% 
-    
-    # -e 100 --save_every 2
-    # --e 50 --save_every 2 -d 0.2 -a  Baseline + Dropout + Data Augmentation: 85.880%, Viktor
 
     # Increased dropout + data augmentation + batch normalization: 88% (TAKES 3:30 HOURS TO TRAIN. Sight...)
     # -e 400 --save_every 2 -d 0.2 -id 0.1 -a -bn, Viktor (THIEF)
-
-    # Using Adam Optimizer
-    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -ad, Santi - Colab
-
-    # Using AdamW Optimizer
-    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -aw, Viktor?? (Snälla?)
+ 
+    # -e 200 --save_every 2 -d 0.2 -id 0.1 # baseline + dropout + increased dropout, Santi - Colab 
 
     # Normalize input data to have 0 mean and standard deviation 1 + 
     # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -n , Santi - GCP
 
+    # Using AdamW Optimizer
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -aw, Theo
+
+    # Using Adam Optimizer
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -ad, Viktor
+
+    # Using cosine annealing with warm restarts
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -s cosine_annealing+re-starts, Theo
+
+    # Using step decay
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -s step, Viktor
     
+    # Using Cosine Annealing with Warm-up
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -s warm-up+cosine_annealing, Santi
     # TODO: 
+    
+
     
 
     
@@ -404,25 +415,26 @@ if __name__ == "__main__":
         elif args.adamw:
             optimizer = torch.optim.AdamW(model.parameters(), lr=.001, weight_decay=args.l2_decay)
             
-        lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda _epoch: 0.001)  # constant default learning rate
+        # lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 0.001)  # constant default learning rate
         if args.scheduler == 'step':
-            lr_scheduler = StepLR(optimizer, step_size=1, gamma=0.1)
+            lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
         elif args.scheduler == 'cosine_annealing+re-starts':
             lr_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=0.00001)
         elif args.scheduler == 'warm-up+cosine_annealing':
             n_warm_up_epochs = 10
-            eta_min = 0
-            eta_max = 0
-            warm_up_factor = lambda epoch: epoch if epoch / n_warm_up_epochs < n_warm_up_epochs else 1
-            cosine_annealing = 0
-            lr_scheduler = None
-
-            #warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=2000)
+            n_annealing_epochs = num_epochs - n_warm_up_epochs
+            eta_min = 0.0001
+            eta_max = 0.1
+            warm_up_learning_rate = lambda epoch: eta_min + epoch / n_warm_up_epochs * (eta_max - eta_min)
+            cosine_annealing = lambda epoch: eta_min + 0.5 * (eta_max - eta_min) * (1 + np.cos(epoch / n_annealing_epochs * np.pi))
+            
+            warm_up_and_cosine_annealing = lambda epoch: warm_up_learning_rate(epoch) if epoch < n_warm_up_epochs else cosine_annealing(epoch - n_warm_up_epochs)
 
         for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs, ascii=True):
             model.train()
 
             for index, (images, labels) in tqdm(enumerate(trainloader), total=num_batches, leave=False, ascii=True):
+                
                 images = images.to(device)
                 labels = labels.to(device)
 
@@ -433,7 +445,12 @@ if __name__ == "__main__":
                 current_loss.backward()
                 optimizer.step()
             
-            lr_scheduler.step()
+            if args.scheduler == 'warm-up+cosine_annealing':
+                for g in optimizer.param_groups:
+                    g['lr'] = warm_up_and_cosine_annealing(epoch)
+
+            elif args.scheduler != 'default':
+                lr_scheduler.step()
 
             with torch.no_grad():
                 model.eval()
