@@ -14,7 +14,7 @@ import torchvision.transforms as transforms
 import numpy as np
 # from tqdm.notebook import tqdm
 from tqdm.auto import tqdm
-import pandas as pd 
+import pandas as pd
 import matplotlib.pyplot as plt
 import random
 
@@ -26,9 +26,11 @@ torch.manual_seed(30)
 random.seed(30)
 np.random.seed(30)
 
+
 class BaselineModel(nn.Module):
     def __init__(self, dropout=0, increased_dropout=0, batch_norm=False):
         super(BaselineModel, self).__init__()
+
         def init_weights(m):
             if isinstance(m, (nn.Conv2d, nn.Linear)):
                 nn.init.kaiming_uniform_(m.weight)
@@ -56,7 +58,7 @@ class BaselineModel(nn.Module):
             nn.Dropout(dropout + increased_dropout)
         )
         self.block2.apply(init_weights)
-        
+
         self.block3 = nn.Sequential(
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
@@ -86,11 +88,80 @@ class BaselineModel(nn.Module):
         x3 = self.block3(x2)
 
         # x4 = x3.view(-1, 64 * 8 * 8)
-        x4 = x3.reshape((batch_size,-1))
+        x4 = x3.reshape((batch_size, -1))
 
         x5 = self.fc(x4)
 
         return x5
+
+
+class BaselineModelModifiedBNDropoutOrder(nn.Module):
+    def __init__(self, dropout=0, increased_dropout=0, batch_norm=False):
+        super(BaselineModelModifiedBNDropoutOrder, self).__init__()
+
+        def init_weights(m):
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.kaiming_uniform_(m.weight)
+
+        self.block1 = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.Dropout(dropout / 2),
+            nn.BatchNorm2d(32) if batch_norm else nn.Identity(),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.Dropout(dropout / 2),
+            nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.block1.apply(init_weights)
+
+        self.block2 = nn.Sequential(
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.Dropout((dropout + increased_dropout) / 2),
+            nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.Dropout((dropout + increased_dropout) / 2),
+            nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.block2.apply(init_weights)
+
+        self.block3 = nn.Sequential(
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.Dropout((dropout + increased_dropout * 2) / 2),
+            nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.Dropout((dropout + increased_dropout * 2) / 2),
+            nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.block3.apply(init_weights)
+
+        self.fc = nn.Sequential(
+            nn.Linear(2048, 128),
+            nn.ReLU(),
+            nn.Dropout(dropout + increased_dropout * 3),
+            nn.BatchNorm1d(128) if batch_norm else nn.Identity(),
+            nn.Linear(128, 10)
+        )
+        self.fc.apply(init_weights)
+
+        self.to(device)
+
+    def forward(self, x):
+        x1 = self.block1(x)
+        x2 = self.block2(x1)
+        x3 = self.block3(x2)
+        x4 = x3.reshape((batch_size, -1))
+        x5 = self.fc(x4)
+
+        return x5
+
 
 def plot_curves(ax, train, val, name):
     ax.set_title(name)
@@ -99,6 +170,7 @@ def plot_curves(ax, train, val, name):
     ax.set_xlabel('Epochs')
     ax.set_ylabel(name)
     ax.legend()
+
 
 def summarize_diagnostics(plotpath, history):
     fig, axs = plt.subplots(2, 1)
@@ -109,9 +181,10 @@ def summarize_diagnostics(plotpath, history):
     plt.tight_layout()
     plt.savefig(plotpath)
 
+
 def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
     running_loss = 0
-    
+
     correct = 0
     total = 0
 
@@ -132,9 +205,9 @@ def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
             outputs = model(images)
             current_loss = loss_function(outputs, labels)
             running_loss += current_loss.detach().item()
-            
+
             _, predicted = torch.max(outputs.data, 1)
-            
+
             # the class with the highest energy is what we choose as prediction
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
@@ -144,10 +217,10 @@ def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
                     correct_pred[classes[label]] += 1
                 total_pred[classes[label]] += 1
 
-    network_loss = running_loss / num_batches 
+    network_loss = running_loss / num_batches
     network_accuracy = (float(correct) / total) * 100
 
-    #print(f'Accuracy of the network on the test images: {accuracy} %')
+    # print(f'Accuracy of the network on the test images: {accuracy} %')
 
     accuracy_per_class = {}
 
@@ -155,8 +228,8 @@ def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
     for classname, correct_count in correct_pred.items():
         accuracy = 100 * float(correct_count) / total_pred[classname]
         accuracy_per_class[classname] = accuracy
-        #print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
-    
+        # print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
+
     return network_loss, network_accuracy, accuracy_per_class
 
 
@@ -193,6 +266,7 @@ class PickleHelper:
         with open(self.filename, "rb") as file:
             self.pickled = pickle.load(file)
 
+
 def folder_helper(folderpath):
     if not os.path.exists(folderpath):
         os.makedirs(folderpath)
@@ -204,28 +278,28 @@ def folder_helper(folderpath):
 
     return nested_path
 
+
 def get_path(folderpath, filename, epoch):
     epoch_path = os.path.join(folderpath, str(epoch))
     if not os.path.exists(epoch_path):
         os.makedirs(epoch_path)
     return os.path.join(epoch_path, filename)
 
-def load_data(apply_augmentation=False, norm_m0_sd1=False):    
+
+def load_data(apply_augmentation=False, norm_m0_sd1=False):
     transform = transforms.Compose([
         transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
         transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
+        transforms.ToTensor()
     ])
 
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            transform=transform if apply_augmentation else transforms.ToTensor(),
-                                            download=True)
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, transform=transforms.ToTensor(), download=True)
 
     if norm_m0_sd1:
-        # train_mean = trainset.mean(axis=(0,1,2))
-        train_mean = trainset.data.mean(axis=(0,1,2))
-        train_std = trainset.data.std(axis=(0,1,2))
- 
+
+        train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
+        train_std = trainset.data.std(axis=(0, 1, 2)) / 255
+
         transform_norm_aug = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(train_mean, train_std),
@@ -235,33 +309,40 @@ def load_data(apply_augmentation=False, norm_m0_sd1=False):
 
         transform_norm = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(train_mean, train_std),
+            transforms.Normalize(train_mean, train_std)
         ])
 
         trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            transform=transform_norm_aug if apply_augmentation else transform_norm,
-                                            download=True)
-        
-        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                                transform=transform_norm,
+                                                transform=transform_norm_aug if apply_augmentation else transform_norm,
                                                 download=True)
+
+        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                               transform=transform_norm,
+                                               download=True)
+
     else:
-        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                                transform=transforms.ToTensor(),
+
+        trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                                transform=transform if apply_augmentation else transforms.ToTensor(),
                                                 download=True)
-                                                
+
+        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                               transform=transforms.ToTensor(),
+                                               download=True)
+
     trainset, valset = torch.utils.data.random_split(trainset, [len(trainset) - validation_size, validation_size])
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-                                            shuffle=True, num_workers=2)
+                                              shuffle=True, num_workers=2)
     valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size,
                                             shuffle=False, num_workers=2)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-                                            shuffle=False, num_workers=2)
+                                             shuffle=False, num_workers=2)
 
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     return trainset, valset, testset, trainloader, valloader, testloader, classes
+
 
 if __name__ == "__main__":
     batch_size = 100
@@ -271,61 +352,65 @@ if __name__ == "__main__":
     model_group = parser.add_mutually_exclusive_group()
     model_group.add_argument('--baseline_model', action='store_true', default=True, help='Use baseline model')
     model_group.add_argument('--other_model', action='store_true', help='Use other model')
+    model_group.add_argument('--baseline_model_bn_dropout_reversed', action='store_true', help='using a different order for bn and dropout. Dropout is now applied twice within each layer!')
 
-    scheduler_group = parser.add_mutually_exclusive_group()
-    scheduler_group.add_argument('--lr_scheduler_default', action='store_true', default=True, help="learning rate scheduler: using a constant fixed learning rate")
-
-    parser.add_argument("-s", "--scheduler", choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts"],
-                    default="default", help="Select a mode")
-
+    parser.add_argument("-s", "--scheduler",
+                        choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts"],
+                        default="default", help="Select a mode")
 
     parser.add_argument("-l", "--load", nargs=2, metavar=("FOLDERPATH", "EPOCH"), help="Load data from folder")
     parser.add_argument("-d", "--dropout", type=float, default=0.0, help="Dropout probability")
     parser.add_argument("-id", "--increased_dropout", type=float, default=0.0, help="Increased dropout probability")
     parser.add_argument("-w", "--l2_decay", type=float, default=0.0, help="Apply L2 weight regularization")
     parser.add_argument("-e", "--n_epochs", type=int, default=10, help="Number of epochs")
-    parser.add_argument("-a", "--apply_augmentation", action="store_true", help="apply augmentation on the training data")
+    parser.add_argument("-a", "--apply_augmentation", action="store_true",
+                        help="apply augmentation on the training data")
     parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
     parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
-    parser.add_argument("-n", "--norm_m0_sd1", action="store_true", help="Normalize to have 0 mean and standard deviation 1")
+    parser.add_argument("-n", "--norm_m0_sd1", action="store_true",
+                        help="Normalize to have 0 mean and standard deviation 1")
+
     parser.add_argument("-ad", "--adam", action="store_true", help="Use Adam optimizer")
     parser.add_argument("-aw", "--adamw", action="store_true", help="Use AdamW optimizer")
     args = parser.parse_args()
 
-
     # -l trained_models/20230517-095003 50 -e 50 --save_every 2 -d 0.2
 
     # Already done
-    # -e 50 --save_every 2 # baseline, Viktor | Baseline: 73.xxxxx%  
-    # -e 100 --save_every 2 -d 0.2 # baseline + dropout, Viktor | Baseline + Dropout: 83.450%  
+    # -e 100 --save_every 2 # baseline, Viktor | Baseline: 73.xxxxx%
+    # -e 100 --save_every 2 -d 0.2 # baseline + dropout, Viktor | Baseline + Dropout: 83.450%
     # -e 50 --save_every 2 -w 0.001 # baseline + weight decay, Santi  | Baseline + Weight Decay: 72.550% Model = "trained_models/20230517-081045_w0_001"
     # Baseline + Increasing Dropout: 84.690%
-    # -e 50 --save_every 2 -d 0.2 -id 0.1 # baseline + dropout + increased dropout, Santi - Colab 
-    
-    
+
+    # -e 50 --save_every 2 -a, # baseline + augmentation, Theo | Baseline + Data Augmentation: 84.470%
+    # --e 200 --save_every 2 -d 0.2 -a  Baseline + Dropout + Data Augmentation: 85.880%, Viktor
+
     # In progress:
-    # -e 50 --save_every 2 -a, # baseline + augmentation, Theo | Baseline + Data Augmentation: 84.470% 
-    
-    # -e 100 --save_every 2
-    # --e 50 --save_every 2 -d 0.2 -a  Baseline + Dropout + Data Augmentation: 85.880%, Viktor
 
     # Increased dropout + data augmentation + batch normalization: 88% (TAKES 3:30 HOURS TO TRAIN. Sight...)
     # -e 400 --save_every 2 -d 0.2 -id 0.1 -a -bn, Viktor (THIEF)
 
-    # Using Adam Optimizer
-    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -ad, Santi - Colab
+    # -e 200 --save_every 2 -d 0.2 -id 0.1 # baseline + dropout + increased dropout, Santi - Colab
 
-    # Using AdamW Optimizer
-    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -aw, Viktor?? (Snälla?)
-
-    # Normalize input data to have 0 mean and standard deviation 1 + 
+    # Normalize input data to have 0 mean and standard deviation 1 +
     # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -n , Santi - GCP
 
-    
-    # TODO: 
-    
+    # Using AdamW Optimizer
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -aw, Theo
 
-    
+    # Using Adam Optimizer
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -ad, Viktor
+
+    # Using cosine annealing with warm restarts
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -s cosine_annealing+re-starts, Theo
+
+    # Using step decay
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -s step, Viktor
+
+    # Using Cosine Annealing with Warm-up
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -s warm-up+cosine_annealing, Santi
+    # TODO:
+
     if args.load:
         folder_path = args.load[0]
         epoch = args.load[1]
@@ -337,7 +422,8 @@ if __name__ == "__main__":
         folder_path = folder_helper("trained_models")
         ph = PickleHelper(get_path(folder_path, PICKLE_FILENAME, min(args.n_epochs, args.save_every)))
 
-    trainset, valset, testset, trainloader, valloader, testloader, classes = load_data(args.apply_augmentation, args.norm_m0_sd1)
+    trainset, valset, testset, trainloader, valloader, testloader, classes = load_data(args.apply_augmentation,
+                                                                                       args.norm_m0_sd1)
 
     showImages = False
     if showImages:
@@ -347,18 +433,22 @@ if __name__ == "__main__":
                 plt.imshow(np.transpose(npimg, (1, 2, 0)))
                 plt.show()
 
+
             # get some random training images
             dataiter = iter(trainloader)
             images, labels = next(dataiter)
 
             # show images
             imshow(torchvision.utils.make_grid(images))
-            print(' '.join(f'{classes[labels[j]]:5s} {chr(10) if (j % 8)==7 else ""}' for j in range(batch_size)))
+            print(' '.join(f'{classes[labels[j]]:5s} {chr(10) if (j % 8) == 7 else ""}' for j in range(batch_size)))
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device}...")
 
     model = BaselineModel(args.dropout, args.increased_dropout, args.batch_norm)
+    if args.baseline_model_bn_dropout_reversed:
+        print('using different order')
+        model = BaselineModelModifiedBNDropoutOrder(args.dropout, args.increased_dropout, args.batch_norm)
 
     history = ph.register(
         "history",
@@ -403,21 +493,23 @@ if __name__ == "__main__":
             optimizer = torch.optim.Adam(model.parameters(), lr=.001, weight_decay=args.l2_decay)
         elif args.adamw:
             optimizer = torch.optim.AdamW(model.parameters(), lr=.001, weight_decay=args.l2_decay)
-            
-        lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda _epoch: 0.001)  # constant default learning rate
+
+        # lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 0.001)  # constant default learning rate
         if args.scheduler == 'step':
-            lr_scheduler = StepLR(optimizer, step_size=1, gamma=0.1)
+            lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
         elif args.scheduler == 'cosine_annealing+re-starts':
             lr_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=0.00001)
         elif args.scheduler == 'warm-up+cosine_annealing':
             n_warm_up_epochs = 10
-            eta_min = 0
-            eta_max = 0
-            warm_up_factor = lambda epoch: epoch if epoch / n_warm_up_epochs < n_warm_up_epochs else 1
-            cosine_annealing = 0
-            lr_scheduler = None
+            n_annealing_epochs = num_epochs - n_warm_up_epochs
+            eta_min = 0.0001
+            eta_max = 0.1
+            warm_up_learning_rate = lambda epoch: eta_min + epoch / n_warm_up_epochs * (eta_max - eta_min)
+            cosine_annealing = lambda epoch: eta_min + 0.5 * (eta_max - eta_min) * (
+                        1 + np.cos(epoch / n_annealing_epochs * np.pi))
 
-            #warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=2000)
+            warm_up_and_cosine_annealing = lambda epoch: warm_up_learning_rate(
+                epoch) if epoch < n_warm_up_epochs else cosine_annealing(epoch - n_warm_up_epochs)
 
         for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs, ascii=True):
             model.train()
@@ -432,8 +524,13 @@ if __name__ == "__main__":
                 current_loss = loss_function(prediction, labels)
                 current_loss.backward()
                 optimizer.step()
-            
-            lr_scheduler.step()
+
+            if args.scheduler == 'warm-up+cosine_annealing':
+                for g in optimizer.param_groups:
+                    g['lr'] = warm_up_and_cosine_annealing(epoch)
+
+            elif args.scheduler != 'default':
+                lr_scheduler.step()
 
             with torch.no_grad():
                 model.eval()
