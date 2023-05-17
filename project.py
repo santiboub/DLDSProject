@@ -7,6 +7,8 @@ import time
 
 import torch
 import torch.nn as nn
+# from torch.optim.lr_scheduler import LambdaLR, WarmLR
+from torch.optim.lr_scheduler import LambdaLR, StepLR, CosineAnnealingWarmRestarts
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
@@ -25,17 +27,19 @@ random.seed(30)
 np.random.seed(30)
 
 class BaselineModel(nn.Module):
-    def __init__(self, dropout=0):
+    def __init__(self, dropout=0, increased_dropout=0, batch_norm=False):
         super(BaselineModel, self).__init__()
         def init_weights(m):
             if isinstance(m, (nn.Conv2d, nn.Linear)):
-                nn.init.kaiming_uniform_(m.weight)  
+                nn.init.kaiming_uniform_(m.weight)
 
         self.block1 = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
+            nn.BatchNorm2d(32) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
+            nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(dropout)
         )
@@ -44,26 +48,32 @@ class BaselineModel(nn.Module):
         self.block2 = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
+            nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
+            nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout + increased_dropout)
         )
         self.block2.apply(init_weights)
         
         self.block3 = nn.Sequential(
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
+            nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
+            nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout + increased_dropout * 2)
         )
         self.block3.apply(init_weights)
 
         self.fc = nn.Sequential(
             nn.Linear(2048, 128),
             nn.ReLU(),
+            nn.BatchNorm1d(128) if batch_norm else nn.Identity(),
+            nn.Dropout(dropout + increased_dropout * 3),
             nn.Linear(128, 10)
         )
         self.fc.apply(init_weights)
@@ -200,13 +210,46 @@ def get_path(folderpath, filename, epoch):
         os.makedirs(epoch_path)
     return os.path.join(epoch_path, filename)
 
-def load_data():
+def load_data(apply_augmentation=False, norm_m0_sd1=False):    
+    transform = transforms.Compose([
+        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+    ])
+
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            transform=transforms.ToTensor(),
+                                            transform=transform if apply_augmentation else transforms.ToTensor(),
                                             download=True)
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                            transform=transforms.ToTensor(),
+
+    if norm_m0_sd1:
+        # train_mean = trainset.mean(axis=(0,1,2))
+        train_mean = trainset.data.mean(axis=(0,1,2))
+        train_std = trainset.data.std(axis=(0,1,2))
+ 
+        transform_norm_aug = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(train_mean, train_std),
+            transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
+            transforms.RandomHorizontalFlip()
+        ])
+
+        transform_norm = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(train_mean, train_std),
+        ])
+
+        trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                            transform=transform_norm_aug if apply_augmentation else transform_norm,
                                             download=True)
+        
+        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                                transform=transform_norm,
+                                                download=True)
+    else:
+        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                                transform=transforms.ToTensor(),
+                                                download=True)
+                                                
     trainset, valset = torch.utils.data.random_split(trainset, [len(trainset) - validation_size, validation_size])
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
@@ -229,12 +272,60 @@ if __name__ == "__main__":
     model_group.add_argument('--baseline_model', action='store_true', default=True, help='Use baseline model')
     model_group.add_argument('--other_model', action='store_true', help='Use other model')
 
+    scheduler_group = parser.add_mutually_exclusive_group()
+    scheduler_group.add_argument('--lr_scheduler_default', action='store_true', default=True, help="learning rate scheduler: using a constant fixed learning rate")
+
+    parser.add_argument("-s", "--scheduler", choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts"],
+                    default="default", help="Select a mode")
+
+
     parser.add_argument("-l", "--load", nargs=2, metavar=("FOLDERPATH", "EPOCH"), help="Load data from folder")
     parser.add_argument("-d", "--dropout", type=float, default=0.0, help="Dropout probability")
+    parser.add_argument("-id", "--increased_dropout", type=float, default=0.0, help="Increased dropout probability")
+    parser.add_argument("-w", "--l2_decay", type=float, default=0.0, help="Apply L2 weight regularization")
     parser.add_argument("-e", "--n_epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("-a", "--apply_augmentation", action="store_true", help="apply augmentation on the training data")
     parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
+    parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
+    parser.add_argument("-n", "--norm_m0_sd1", action="store_true", help="Normalize to have 0 mean and standard deviation 1")
+    parser.add_argument("-ad", "--adam", action="store_true", help="Use Adam optimizer")
+    parser.add_argument("-aw", "--adamw", action="store_true", help="Use AdamW optimizer")
     args = parser.parse_args()
 
+
+    # -l trained_models/20230517-095003 50 -e 50 --save_every 2 -d 0.2
+
+    # Already done
+    # -e 50 --save_every 2 # baseline, Viktor | Baseline: 73.xxxxx%  
+    # -e 100 --save_every 2 -d 0.2 # baseline + dropout, Viktor | Baseline + Dropout: 83.450%  
+    # -e 50 --save_every 2 -w 0.001 # baseline + weight decay, Santi  | Baseline + Weight Decay: 72.550% Model = "trained_models/20230517-081045_w0_001"
+    # Baseline + Increasing Dropout: 84.690%
+    # -e 50 --save_every 2 -d 0.2 -id 0.1 # baseline + dropout + increased dropout, Santi - Colab 
+    
+    
+    # In progress:
+    # -e 50 --save_every 2 -a, # baseline + augmentation, Theo | Baseline + Data Augmentation: 84.470% 
+    
+    # -e 100 --save_every 2
+    # --e 50 --save_every 2 -d 0.2 -a  Baseline + Dropout + Data Augmentation: 85.880%, Viktor
+
+    # Increased dropout + data augmentation + batch normalization: 88% (TAKES 3:30 HOURS TO TRAIN. Sight...)
+    # -e 400 --save_every 2 -d 0.2 -id 0.1 -a -bn, Viktor (THIEF)
+
+    # Using Adam Optimizer
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -ad, Santi - Colab
+
+    # Using AdamW Optimizer
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -aw, Viktor?? (Snälla?)
+
+    # Normalize input data to have 0 mean and standard deviation 1 + 
+    # -e 100 --save_every 2 -d 0.2 -id 0.1 -a -bn -n , Santi - GCP
+
+    
+    # TODO: 
+    
+
+    
     if args.load:
         folder_path = args.load[0]
         epoch = args.load[1]
@@ -246,27 +337,28 @@ if __name__ == "__main__":
         folder_path = folder_helper("trained_models")
         ph = PickleHelper(get_path(folder_path, PICKLE_FILENAME, min(args.n_epochs, args.save_every)))
 
-    trainset, valset, testset, trainloader, valloader, testloader, classes = load_data()
+    trainset, valset, testset, trainloader, valloader, testloader, classes = load_data(args.apply_augmentation, args.norm_m0_sd1)
 
     showImages = False
     if showImages:
-        def imshow(img):
-            npimg = img.numpy()
-            plt.imshow(np.transpose(npimg, (1, 2, 0)))
-            plt.show()
+        for i in range(3):
+            def imshow(img):
+                npimg = img.numpy()
+                plt.imshow(np.transpose(npimg, (1, 2, 0)))
+                plt.show()
 
-        # get some random training images
-        dataiter = iter(trainloader)
-        images, labels = next(dataiter)
+            # get some random training images
+            dataiter = iter(trainloader)
+            images, labels = next(dataiter)
 
-        # show images
-        imshow(torchvision.utils.make_grid(images))
-        print(' '.join(f'{classes[labels[j]]:5s} {chr(10) if (j % 8)==7 else ""}' for j in range(batch_size)))
+            # show images
+            imshow(torchvision.utils.make_grid(images))
+            print(' '.join(f'{classes[labels[j]]:5s} {chr(10) if (j % 8)==7 else ""}' for j in range(batch_size)))
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device}...")
 
-    model = BaselineModel(args.dropout)
+    model = BaselineModel(args.dropout, args.increased_dropout, args.batch_norm)
 
     history = ph.register(
         "history",
@@ -278,6 +370,13 @@ if __name__ == "__main__":
         }
     )
     test_loss, test_acc, _test_acc_per_class = ph.register("test_performance", (None, None, None))
+    np_random_state = ph.register("np_random_state", np.random.get_state())
+    torch_random_state = ph.register("torch_random_state", torch.get_rng_state())
+    random_state = ph.register("random_state", random.getstate())
+
+    np.random.set_state(np_random_state)
+    torch.set_rng_state(torch_random_state)
+    random.setstate(random_state)
 
     num_epochs = args.n_epochs
     offset_epochs = 0
@@ -299,11 +398,31 @@ if __name__ == "__main__":
     if num_epochs - offset_epochs > 0:
         print(f"Training the network for {num_epochs - offset_epochs} {'more epochs' if offset_epochs > 0 else ''}...")
         loss_function = nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(model.parameters(), lr=.001, momentum=.9)
-        for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs):
+        optimizer = torch.optim.SGD(model.parameters(), lr=.001, momentum=.9, weight_decay=args.l2_decay)
+        if args.adam:
+            optimizer = torch.optim.Adam(model.parameters(), lr=.001, weight_decay=args.l2_decay)
+        elif args.adamw:
+            optimizer = torch.optim.AdamW(model.parameters(), lr=.001, weight_decay=args.l2_decay)
+            
+        lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda _epoch: 0.001)  # constant default learning rate
+        if args.scheduler == 'step':
+            lr_scheduler = StepLR(optimizer, step_size=1, gamma=0.1)
+        elif args.scheduler == 'cosine_annealing+re-starts':
+            lr_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=0.00001)
+        elif args.scheduler == 'warm-up+cosine_annealing':
+            n_warm_up_epochs = 10
+            eta_min = 0
+            eta_max = 0
+            warm_up_factor = lambda epoch: epoch if epoch / n_warm_up_epochs < n_warm_up_epochs else 1
+            cosine_annealing = 0
+            lr_scheduler = None
+
+            #warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=2000)
+
+        for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs, ascii=True):
             model.train()
 
-            for index, (images, labels) in tqdm(enumerate(trainloader), total=num_batches, leave=False):
+            for index, (images, labels) in tqdm(enumerate(trainloader), total=num_batches, leave=False, ascii=True):
                 images = images.to(device)
                 labels = labels.to(device)
 
@@ -313,6 +432,8 @@ if __name__ == "__main__":
                 current_loss = loss_function(prediction, labels)
                 current_loss.backward()
                 optimizer.step()
+            
+            lr_scheduler.step()
 
             with torch.no_grad():
                 model.eval()
@@ -346,5 +467,8 @@ if __name__ == "__main__":
 
                 ph.update("history", history)
                 ph.update("test_performance", (test_loss, test_acc, _test_acc_per_class))
+                ph.update("np_random_state", np.random.get_state())
+                ph.update("torch_random_state", torch.get_rng_state())
+                ph.update("random_state", random.getstate())
                 pickle_path = get_path(folder_path, PICKLE_FILENAME, epoch + 1)
                 ph.save(path=pickle_path)
