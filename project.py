@@ -575,11 +575,14 @@ if __name__ == "__main__":
     if num_epochs - offset_epochs > 0:
         print(f"Training the network for {num_epochs - offset_epochs} {'more epochs' if offset_epochs > 0 else ''}...")
         loss_function = nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(model.parameters(), lr=.001, momentum=.9, weight_decay=args.l2_decay)
+        lr = 0.001
+        if args.scheduler == 'step':
+            lr = 0.1
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=.9, weight_decay=args.l2_decay)
         if args.adam:
-            optimizer = torch.optim.Adam(model.parameters(), lr=.001, weight_decay=args.l2_decay)
+            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=args.l2_decay)
         elif args.adamw:
-            optimizer = torch.optim.AdamW(model.parameters(), lr=.001, weight_decay=args.l2_decay)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=args.l2_decay)
 
         # lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 0.001)  # constant default learning rate
         if args.scheduler == 'step':
