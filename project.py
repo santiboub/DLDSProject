@@ -163,6 +163,91 @@ class BaselineModelModifiedBNDropoutOrder(nn.Module):
         return x5
 
 
+class ResNetBlock(nn.Module):
+
+    def __init__(self, in_channels, out_channels, initial_stride=1):
+        super(ResNetBlock, self).__init__()
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=initial_stride, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU()
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels)
+        )
+
+        self.skip_connection = nn.Sequential()
+        if in_channels != out_channels:
+            # adjust skip connection dimension (dotted lines Lecture 7 slide 37)
+            self.skip_connection = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=initial_stride, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x1 = self.conv1(x)
+        x2 = self.conv2(x1)
+
+        x2 += self.skip_connection(x)
+        return self.relu(x2)
+
+
+class ResNetModel(nn.Module):
+
+    def __init__(self, block=ResNetBlock, num_classes=10):
+        super(ResNetModel, self).__init__()
+
+        def init_weights(m):
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.kaiming_uniform_(m.weight)
+
+        self.initial_block = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(num_features=64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        )
+
+        self.block1 = self._create_block(block, 64, 64, 3, initial_stride=1)
+        self.block2 = self._create_block(block, 64, 128, 4, initial_stride=2)
+        self.block3 = self._create_block(block, 128, 256, 6, initial_stride=2)
+        self.block4 = self._create_block(block, 256, 512, 3, initial_stride=2)
+
+        self.average_pool = nn.AvgPool2d(kernel_size=1)
+        self.fc = nn.Linear(512, num_classes)
+
+        for entry in [self.initial_block, self.block1, self.block2, self.block3, self.block4, self.fc]:
+            entry.apply(init_weights)
+
+        self.to(device)
+
+    def _create_block(self, block, in_channels, out_channels, num_blocks, initial_stride):
+        layers = [block(in_channels, out_channels, initial_stride)]
+
+        for index in range(1, num_blocks):
+            layers.append(block(out_channels, out_channels, 1))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x1 = self.initial_block(x)
+        x2 = self.block1(x1)
+        x3 = self.block2(x2)
+        x4 = self.block3(x3)
+        x5 = self.block4(x4)
+        x6 = self.average_pool(x5)
+
+        x6 = x6.reshape((batch_size, -1))
+        x7 = self.fc(x6)
+
+        return x7
+
+
 def plot_curves(ax, train, val, name):
     ax.set_title(name)
     ax.plot(train, color='blue', label='Training ' + name)
@@ -353,6 +438,7 @@ if __name__ == "__main__":
     model_group.add_argument('--baseline_model', action='store_true', default=True, help='Use baseline model')
     model_group.add_argument('--other_model', action='store_true', help='Use other model')
     model_group.add_argument('--baseline_model_bn_dropout_reversed', action='store_true', help='using a different order for bn and dropout. Dropout is now applied twice within each layer!')
+    model_group.add_argument('--resnet_model', action='store_true', help='Use the ResNet model architecture')
 
     parser.add_argument("-s", "--scheduler",
                         choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts"],
@@ -447,8 +533,9 @@ if __name__ == "__main__":
 
     model = BaselineModel(args.dropout, args.increased_dropout, args.batch_norm)
     if args.baseline_model_bn_dropout_reversed:
-        print('using different order')
         model = BaselineModelModifiedBNDropoutOrder(args.dropout, args.increased_dropout, args.batch_norm)
+    if args.resnet_model:
+        model = ResNetModel()
 
     history = ph.register(
         "history",
