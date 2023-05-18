@@ -436,7 +436,6 @@ def load_data(apply_augmentation=False, norm_m0_sd1=False, dataset=torchvision.d
 
 
 if __name__ == "__main__":
-    batch_size = 100
     validation_size = 5000
 
     parser = argparse.ArgumentParser()
@@ -451,6 +450,7 @@ if __name__ == "__main__":
                         default="default", help="Select a mode")
 
     parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100'], default='CIFAR10', help='choose a training/test data set')
+    parser.add_argument("-bs", "--batch_size", type=int, default=100, help="Set the batch size")
 
     parser.add_argument("-l", "--load", nargs=2, metavar=("FOLDERPATH", "EPOCH"), help="Load data from folder")
     parser.add_argument("-d", "--dropout", type=float, default=0.0, help="Dropout probability")
@@ -467,6 +467,8 @@ if __name__ == "__main__":
     parser.add_argument("-ad", "--adam", action="store_true", help="Use Adam optimizer")
     parser.add_argument("-aw", "--adamw", action="store_true", help="Use AdamW optimizer")
     args = parser.parse_args()
+
+    batch_size = args.batch_size
 
     # -l trained_models/20230517-095003 50 -e 50 --save_every 2 -d 0.2
 
@@ -541,9 +543,9 @@ if __name__ == "__main__":
 
     model = BaselineModel(args.dropout, args.increased_dropout, args.batch_norm, num_classes=len(classes))
     if args.baseline_model_bn_dropout_reversed:
-        model = BaselineModelModifiedBNDropoutOrder(args.dropout, args.increased_dropout, args.batch_norm)
+        model = BaselineModelModifiedBNDropoutOrder(args.dropout, args.increased_dropout, args.batch_norm, num_classes=len(classes))
     if args.resnet_model:
-        model = ResNetModel()
+        model = ResNetModel(num_classes=len(classes))
 
     history = ph.register(
         "history",
