@@ -28,7 +28,7 @@ np.random.seed(30)
 
 
 class BaselineModel(nn.Module):
-    def __init__(self, dropout=0, increased_dropout=0, batch_norm=False):
+    def __init__(self, dropout=0, increased_dropout=0, batch_norm=False, num_classes=10):
         super(BaselineModel, self).__init__()
 
         def init_weights(m):
@@ -76,7 +76,7 @@ class BaselineModel(nn.Module):
             nn.ReLU(),
             nn.BatchNorm1d(128) if batch_norm else nn.Identity(),
             nn.Dropout(dropout + increased_dropout * 3),
-            nn.Linear(128, 10)
+            nn.Linear(128, num_classes)
         )
         self.fc.apply(init_weights)
 
@@ -88,7 +88,8 @@ class BaselineModel(nn.Module):
         x3 = self.block3(x2)
 
         # x4 = x3.view(-1, 64 * 8 * 8)
-        x4 = x3.reshape((batch_size, -1))
+        current_batch_size = x3.size(dim=0)
+        x4 = x3.reshape((current_batch_size, -1))
 
         x5 = self.fc(x4)
 
@@ -96,7 +97,7 @@ class BaselineModel(nn.Module):
 
 
 class BaselineModelModifiedBNDropoutOrder(nn.Module):
-    def __init__(self, dropout=0, increased_dropout=0, batch_norm=False):
+    def __init__(self, dropout=0, increased_dropout=0, batch_norm=False, num_classes=10):
         super(BaselineModelModifiedBNDropoutOrder, self).__init__()
 
         def init_weights(m):
@@ -147,7 +148,7 @@ class BaselineModelModifiedBNDropoutOrder(nn.Module):
             nn.ReLU(),
             nn.Dropout(dropout + increased_dropout * 3),
             nn.BatchNorm1d(128) if batch_norm else nn.Identity(),
-            nn.Linear(128, 10)
+            nn.Linear(128, num_classes)
         )
         self.fc.apply(init_weights)
 
@@ -157,7 +158,9 @@ class BaselineModelModifiedBNDropoutOrder(nn.Module):
         x1 = self.block1(x)
         x2 = self.block2(x1)
         x3 = self.block3(x2)
-        x4 = x3.reshape((batch_size, -1))
+
+        current_batch_size = x3.size(dim=0)
+        x4 = x3.reshape((current_batch_size, -1))
         x5 = self.fc(x4)
 
         return x5
@@ -242,7 +245,8 @@ class ResNetModel(nn.Module):
         x5 = self.block4(x4)
         x6 = self.average_pool(x5)
 
-        x6 = x6.reshape((batch_size, -1))
+        current_batch_size = x6.size(dim=0)
+        x6 = x6.reshape((current_batch_size, -1))
         x7 = self.fc(x6)
 
         return x7
@@ -311,7 +315,11 @@ def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
 
     # print accuracy for each class
     for classname, correct_count in correct_pred.items():
-        accuracy = 100 * float(correct_count) / total_pred[classname]
+        if total_pred[classname] != 0:
+            accuracy = 100 * float(correct_count) / total_pred[classname]
+        else:
+            accuracy = 0
+
         accuracy_per_class[classname] = accuracy
         # print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
 
@@ -371,17 +379,17 @@ def get_path(folderpath, filename, epoch):
     return os.path.join(epoch_path, filename)
 
 
-def load_data(apply_augmentation=False, norm_m0_sd1=False):
+def load_data(apply_augmentation=False, norm_m0_sd1=False, dataset=torchvision.datasets.CIFAR10):
     transform = transforms.Compose([
         transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor()
     ])
 
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, transform=transforms.ToTensor(), download=True)
+    trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
+    classes = trainset.classes
 
     if norm_m0_sd1:
-
         train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
         train_std = trainset.data.std(axis=(0, 1, 2)) / 255
 
@@ -397,21 +405,21 @@ def load_data(apply_augmentation=False, norm_m0_sd1=False):
             transforms.Normalize(train_mean, train_std)
         ])
 
-        trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+        trainset = dataset(root='./data', train=True,
                                                 transform=transform_norm_aug if apply_augmentation else transform_norm,
                                                 download=True)
 
-        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+        testset = dataset(root='./data', train=False,
                                                transform=transform_norm,
                                                download=True)
 
     else:
 
-        trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+        trainset = dataset(root='./data', train=True,
                                                 transform=transform if apply_augmentation else transforms.ToTensor(),
                                                 download=True)
 
-        testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+        testset = dataset(root='./data', train=False,
                                                transform=transforms.ToTensor(),
                                                download=True)
 
@@ -423,8 +431,6 @@ def load_data(apply_augmentation=False, norm_m0_sd1=False):
                                             shuffle=False, num_workers=2)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                              shuffle=False, num_workers=2)
-
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     return trainset, valset, testset, trainloader, valloader, testloader, classes
 
@@ -443,6 +449,8 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--scheduler",
                         choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts"],
                         default="default", help="Select a mode")
+
+    parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100'], default='CIFAR10', help='choose a training/test data set')
 
     parser.add_argument("-l", "--load", nargs=2, metavar=("FOLDERPATH", "EPOCH"), help="Load data from folder")
     parser.add_argument("-d", "--dropout", type=float, default=0.0, help="Dropout probability")
@@ -509,7 +517,7 @@ if __name__ == "__main__":
         ph = PickleHelper(get_path(folder_path, PICKLE_FILENAME, min(args.n_epochs, args.save_every)))
 
     trainset, valset, testset, trainloader, valloader, testloader, classes = load_data(args.apply_augmentation,
-                                                                                       args.norm_m0_sd1)
+                                                                                       args.norm_m0_sd1, torchvision.datasets.CIFAR100 if args.dataset == 'CIFAR100' else torchvision.datasets.CIFAR10)
 
     showImages = False
     if showImages:
@@ -531,7 +539,7 @@ if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device}...")
 
-    model = BaselineModel(args.dropout, args.increased_dropout, args.batch_norm)
+    model = BaselineModel(args.dropout, args.increased_dropout, args.batch_norm, num_classes=len(classes))
     if args.baseline_model_bn_dropout_reversed:
         model = BaselineModelModifiedBNDropoutOrder(args.dropout, args.increased_dropout, args.batch_norm)
     if args.resnet_model:
