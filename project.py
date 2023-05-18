@@ -207,7 +207,7 @@ class ResNetModel(nn.Module):
 
         def init_weights(m):
             if isinstance(m, (nn.Conv2d, nn.Linear)):
-                nn.init.kaiming_uniform_(m.weight)
+                nn.init.xavier_normal_(m.weight)
 
         self.initial_block = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False),
