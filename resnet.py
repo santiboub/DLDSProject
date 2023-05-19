@@ -97,10 +97,10 @@ class ResNet(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(),
         )
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1, k_list=k_list)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2, k_list=k_list)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2, k_list=k_list)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2, k_list=k_list)
         self.linear = nn.Linear(512, num_classes)
         self.avgp = nn.AvgPool2d(4)
         self.dropout = nn.Dropout2d(dropout)
