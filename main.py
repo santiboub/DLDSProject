@@ -18,7 +18,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import random
 
-from senet import SENet34
+from senet import SENet34, SENetBottleneck34
+from resnet import ResNet34
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
@@ -154,7 +155,6 @@ def get_path(folderpath, filename, epoch):
 
 
 def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=False, dataset=torchvision.datasets.CIFAR10):
-
     trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     classes = trainset.classes
 
@@ -169,7 +169,6 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
-
 
     trainset = dataset(
         root='./data', 
@@ -209,27 +208,34 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
     return trainset, valset, testset, trainloader, valloader, testloader, classes
 
 
-if __name__ == "__main__":
-    validation_size = 5000
-
+def parse_arguments():
     parser = argparse.ArgumentParser()
     model_group = parser.add_mutually_exclusive_group()
     model_group.add_argument('--baseline_model', action='store_true', default=True, help='Use baseline model')
     model_group.add_argument('--other_model', action='store_true', help='Use other model')
-    model_group.add_argument('--baseline_model_bn_dropout_reversed', action='store_true', help='using a different order for bn and dropout. Dropout is now applied twice within each layer!')
+    model_group.add_argument('--baseline_model_bn_dropout_reversed', action='store_true',
+                             help='using a different order for bn and dropout. Dropout is now applied twice within each layer!')
     model_group.add_argument('--resnet_model', action='store_true', help='Use the ResNet model architecture')
-    model_group.add_argument('--resnet_model_bottleneck', action='store_true', help='Use the ResNet model with bottleneck blocks')
-    model_group.add_argument('--resnet_model_squeeze_excitation', action='store_true', help='Use the ResNet model with SqueezeExciation blocks')
-    model_group.add_argument('--resnet_model_squeeze_excitation_bottleneck', action='store_true', help='Use the ResNet model with SqueezeExciation blocks with bottleneck')
-    model_group.add_argument('--resnet_model_squeeze_excitation_adjustable', action='store_true', help='Use the ResNet model with SqueezeExciation blocks with bottleneck')
-    model_group.add_argument('--resnet_model_adjustable', action='store_true', help='Use the ResNet model architecture with adjustable residual connection')
-    model_group.add_argument('--resnet_pytorch', action='store_true', help="train a pre-defined resnet34 model architecture")
+    model_group.add_argument('--resnet_model_bottleneck', action='store_true',
+                             help='Use the ResNet model with bottleneck blocks')
+    model_group.add_argument('--resnet_model_squeeze_excitation', action='store_true',
+                             help='Use the ResNet model with SqueezeExciation blocks')
+    model_group.add_argument('--resnet_model_squeeze_excitation_bottleneck', action='store_true',
+                             help='Use the ResNet model with SqueezeExciation blocks with bottleneck')
+    model_group.add_argument('--resnet_model_squeeze_excitation_adjustable', action='store_true',
+                             help='Use the ResNet model with SqueezeExciation blocks with bottleneck')
+    model_group.add_argument('--resnet_model_adjustable', action='store_true',
+                             help='Use the ResNet model architecture with adjustable residual connection')
+    model_group.add_argument('--resnet_pytorch', action='store_true',
+                             help="train a pre-defined resnet34 model architecture")
 
     parser.add_argument("-s", "--scheduler",
-                        choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts", "val_loss_plateau"],
+                        choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts",
+                                 "val_loss_plateau"],
                         default="default", help="Select a mode")
 
-    parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100'], default='CIFAR10', help='choose a training/test data set')
+    parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100'], default='CIFAR10',
+                        help='choose a training/test data set')
     parser.add_argument("-bs", "--batch_size", type=int, default=100, help="Set the batch size")
 
     parser.add_argument("-l", "--load", nargs=2, metavar=("FOLDERPATH", "EPOCH"), help="Load data from folder")
@@ -240,23 +246,79 @@ if __name__ == "__main__":
 
     augmentation_group = parser.add_mutually_exclusive_group()
     augmentation_group.add_argument("-a", "--apply_augmentation", action="store_true",
-                        help="apply augmentation on the training data")
+                                    help="apply augmentation on the training data")
     augmentation_group.add_argument("-ra", "--apply_random_augmentation", action="store_true",
-                        help="apply random augmentation on the training data")
+                                    help="apply random augmentation on the training data")
 
     parser.add_argument("-n", "--norm_m0_sd1", action="store_true",
                         help="Normalize to have 0 mean and standard deviation 1")
     parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
     parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
-  
+
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.001, help="Intial learning rate")
 
     parser.add_argument("-ad", "--adam", action="store_true", help="Use Adam optimizer")
     parser.add_argument("-aw", "--adamw", action="store_true", help="Use AdamW optimizer")
     parser.add_argument("-rms", "--rmsprop", action="store_true", help="Use RMSprop optimizer")
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
+def get_model(device, args, classes):
+    if args.baseline_model_bn_dropout_reversed:
+        model = BaselineModelModifiedBNDropoutOrder(
+            args.dropout,
+            args.increased_dropout,
+            args.batch_norm,
+            num_classes=len(classes)
+        )
+    elif args.resnet_model:
+        model = ResNet34()
+    elif args.resnet_model_squeeze_excitation:
+        model = SENet34()
+    elif args.resnet_model_squeeze_excitation_bottleneck:
+        model = SENetBottleneck34()
+    elif args.resnet_model_squeeze_excitation_adjustable:
+        k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
+        model = ResNetModel(
+            block=SqueezeExcitationBlockFullBasic,
+            num_classes=len(classes),
+            k_list=k_list,
+            dropout=args.dropout
+        )
+    elif args.resnet_model_bottleneck:
+        model = ResNetModel(
+            block=BottleneckBlock,
+            num_classes=len(classes),
+            dropout=args.dropout
+        )
+    elif args.resnet_model_adjustable:
+        k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
+        model = ResNetModel(
+            num_classes=len(classes),
+            k_list=k_list,
+            dropout=args.dropout
+        )
+    elif args.resnet_pytorch:
+        model = torchvision.models.resnet34()
+        model.fc = nn.Linear(model.fc.in_features, len(classes))
+    model.to(device)
+    return model
+
+def get_optimizer(lr, args, model, momentum=.9):
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=args.l2_decay)
+    if args.adam:
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=args.l2_decay)
+    elif args.adamw:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=args.l2_decay)
+    elif args.rmsprop:
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=lr, weight_decay=args.l2_decay, momentum=momentum)
+
+    return optimizer
+
+
+if __name__ == "__main__":
+    validation_size = 5000
+    args = parse_arguments()
     batch_size = args.batch_size
 
     if args.load:
@@ -279,28 +341,7 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device}...")
-
-    #model = BaselineModel(args.dropout, args.increased_dropout, args.batch_norm, num_classes=len(classes))
-    if args.baseline_model_bn_dropout_reversed:
-        model = BaselineModelModifiedBNDropoutOrder(args.dropout, args.increased_dropout, args.batch_norm, num_classes=len(classes))
-    elif args.resnet_model:
-        model = ResNetModel(num_classes=len(classes), dropout=args.dropout)
-    elif args.resnet_model_squeeze_excitation:
-        model = SENet34()
-    elif args.resnet_model_squeeze_excitation_bottleneck:
-        model = ResNetModel(block=SqueezeExcitationBlockFullBottleneck, num_classes=len(classes), dropout=args.dropout)
-    elif args.resnet_model_squeeze_excitation_adjustable:
-        k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = ResNetModel(block=SqueezeExcitationBlockFullBasic, num_classes=len(classes), k_list=k_list, dropout=args.dropout)
-    elif args.resnet_model_bottleneck:
-        model = ResNetModel(block=BottleneckBlock, num_classes=len(classes), dropout=args.dropout)
-    elif args.resnet_model_adjustable:
-        k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = ResNetModel(num_classes=len(classes), k_list=k_list, dropout=args.dropout)
-    elif args.resnet_pytorch:
-        model = torchvision.models.resnet34()
-        model.fc = nn.Linear(model.fc.in_features, len(classes))
-    model.to(device)
+    model = get_model(device, args, classes)
 
     history = ph.register(
         "history",
@@ -341,14 +382,8 @@ if __name__ == "__main__":
         print(f"Training the network for {num_epochs - offset_epochs} {'more epochs' if offset_epochs > 0 else ''}...")
         loss_function = nn.CrossEntropyLoss()
         lr = args.learning_rate
-        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=.9, weight_decay=args.l2_decay)
-        if args.adam:
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=args.l2_decay)
-        elif args.adamw:
-            optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=args.l2_decay)
-        elif args.rmsprop:
-            optimizer = torch.optim.RMSprop(model.parameters(), lr=lr, weight_decay=args.l2_decay, momentum=.9)
-        
+        optimizer = get_optimizer(lr, args, model)
+
         if args.scheduler == 'step':
             lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
         elif args.scheduler == 'cosine_annealing+re-starts':
