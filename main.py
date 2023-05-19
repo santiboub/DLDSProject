@@ -18,6 +18,7 @@ import random
 
 from senet import SENet34, SENetBottleneck34
 from resnet import ResNet34, ResNetBottleneck34
+from baseline import BaselineModel, BaselineModelModifiedBNDropoutOrder
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
@@ -262,7 +263,14 @@ def parse_arguments():
     return parser.parse_args()
 
 def get_model(device, args, classes):
-    if args.baseline_model_bn_dropout_reversed:
+    if args.baseline_model:
+        model = BaselineModel(
+            args.dropout,
+            args.increased_dropout,
+            args.batch_norm,
+            num_classes=len(classes)
+        )
+    elif args.baseline_model_bn_dropout_reversed:
         model = BaselineModelModifiedBNDropoutOrder(
             args.dropout,
             args.increased_dropout,
