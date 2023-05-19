@@ -72,14 +72,23 @@ class ResnetBlockBottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def _make_layer(self, block, planes, num_blocks, stride):
+    def _make_layer(self, block, planes, num_blocks, stride, k_list=None):
         layers = [block(self.in_planes, planes, stride)]
         self.in_planes = planes * block.expansion
-        for _ in range(1, num_blocks):
-            layers.append(block(self.in_planes, planes, stride=1))
+        k_sum = 0
+        for b in range(1, num_blocks):
+            layers.append(block(self.in_planes, planes, stride=1, k_l=k_list[k_sum:k_sum+num_blocks]))
+            k_sum += num_blocks
         return nn.Sequential(*layers)
 
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(
+            self,
+            block,
+            num_blocks,
+            num_classes=10,
+            dropout=0.0,
+            k_list=None
+    ):
         super(ResNet, self).__init__()
         self.in_planes = 64
 
@@ -94,6 +103,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512, num_classes)
         self.avgp = nn.AvgPool2d(4)
+        self.dropout = nn.Dropout2d(dropout)
 
     def forward(self, x):
         y = self.initial_block(x)
@@ -102,14 +112,19 @@ class ResNet(nn.Module):
         y = self.layer3(y)
         y = self.layer4(y)
         y = self.avgp(y)
+        y = self.dropout(y)
         y = y.view(y.size(0), -1)
         y = self.linear(y)
         return y
 
 
-def ResNet18():
-    return ResNet(ResnetBlockBasic, [2, 2, 2, 2])
+def ResNet18(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 8
+    return ResNet(ResnetBlockBasic, [2, 2, 2, 2], dropout, k_list)
 
 
-def ResNet34():
-    return ResNet(ResnetBlockBasic, [3, 4, 6, 3])
+def ResNet34(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 16
+    return ResNet(ResnetBlockBasic, [3, 4, 6, 3], dropout, k_list)
