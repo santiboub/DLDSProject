@@ -534,35 +534,43 @@ def get_path(folderpath, filename, epoch):
 
 
 def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=False, dataset=torchvision.datasets.CIFAR10):
-    transform = transforms.Compose([
-        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor()
-    ])
 
     trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     classes = trainset.classes
 
-    
-    if apply_augmentation:
-        if apply_random_aug:
-            print("Using random augmentation")
-            train_mean = trainset.data.mean(axis=(0, 1, 2))
+    if norm_m0_sd1:
+        train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
+        train_std = trainset.data.std(axis=(0, 1, 2)) / 255
 
-            transform_norm_aug = transforms.Compose([
-                rand_augment_transform(
-                config_str='rand-m9-mstd0.5', 
-                hparams={'img_mean': (int(train_mean[0]), int(train_mean[1]), int(train_mean[2]))}),
-                transforms.ToTensor()
-            ])
-        elif norm_m0_sd1: # mean0 std1
-            train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
-            train_std = trainset.data.std(axis=(0, 1, 2)) / 255
+        # if apply_random_aug:
+        #     print("Using random augmentation")
+        #     train_mean = trainset.data.mean(axis=(0, 1, 2))
+        
+        #     transform_norm_aug = transforms.Compose([
+        #         rand_augment_transform(
+        #         config_str='rand-m9-mstd0.5', 
+        #         hparams={'img_mean': (int(train_mean[0]), int(train_mean[1]), int(train_mean[2]))}),
+        #         transforms.ToTensor()
+        #     ])
+        
+
+        if apply_augmentation:
             transform_norm_aug = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize(train_mean, train_std),
                 transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
                 transforms.RandomHorizontalFlip()
+            ])
+        elif apply_random_aug:
+            print("Using random augmentation")
+            train_mean_unnorm = trainset.data.mean(axis=(0, 1, 2))
+        
+            transform_norm_aug = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(train_mean, train_std),
+                rand_augment_transform(
+                config_str='rand-m9-mstd0.5', 
+                hparams={'img_mean': (int(train_mean_unnorm[0]), int(train_mean_unnorm[1]), int(train_mean_unnorm[2]))}),
             ])
         
         transform_norm = transforms.Compose([
@@ -571,7 +579,7 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
         ])
 
         trainset = dataset(root='./data', train=True,
-                                                transform=transform_norm_aug if apply_augmentation else transform_norm,
+                                                transform=transform_norm_aug if apply_augmentation or apply_random_aug else transform_norm,
                                                 download=True)
 
         testset = dataset(root='./data', train=False,
@@ -579,6 +587,23 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
                                                download=True)
 
     else:
+
+        if apply_augmentation:
+            transform = transforms.Compose([
+                transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor()
+            ])
+        elif apply_random_aug:
+            print("Using random augmentation")
+            train_mean = trainset.data.mean(axis=(0, 1, 2))
+        
+            transform = transforms.Compose([
+                rand_augment_transform(
+                config_str='rand-m9-mstd0.5', 
+                hparams={'img_mean': (int(train_mean[0]), int(train_mean[1]), int(train_mean[2]))}),
+                transforms.ToTensor()
+            ])
 
         trainset = dataset(root='./data', train=True,
                                                 transform=transform if apply_augmentation else transforms.ToTensor(),
@@ -628,14 +653,18 @@ if __name__ == "__main__":
     parser.add_argument("-id", "--increased_dropout", type=float, default=0.0, help="Increased dropout probability")
     parser.add_argument("-w", "--l2_decay", type=float, default=0.0, help="Apply L2 weight regularization")
     parser.add_argument("-e", "--n_epochs", type=int, default=10, help="Number of epochs")
-    parser.add_argument("-a", "--apply_augmentation", action="store_true",
+
+    augmentation_group = parser.add_mutually_exclusive_group()
+    augmentation_group.add_argument("-a", "--apply_augmentation", action="store_true",
                         help="apply augmentation on the training data")
-    parser.add_argument("-ra", "--apply_random_augmentation", action="store_true",
+    augmentation_group.add_argument("-ra", "--apply_random_augmentation", action="store_true",
                         help="apply random augmentation on the training data")
-    parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
-    parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
+
     parser.add_argument("-n", "--norm_m0_sd1", action="store_true",
                         help="Normalize to have 0 mean and standard deviation 1")
+    parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
+    parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
+  
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.001, help="Intial learning rate")
 
     parser.add_argument("-ad", "--adam", action="store_true", help="Use Adam optimizer")
