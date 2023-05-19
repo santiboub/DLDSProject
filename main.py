@@ -7,19 +7,17 @@ import time
 
 import torch
 import torch.nn as nn
-from torch.optim.lr_scheduler import LambdaLR, StepLR, CosineAnnealingWarmRestarts, ReduceLROnPlateau
-from timm.data.auto_augment import rand_augment_transform
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts, ReduceLROnPlateau
 import torchvision
 import torchvision.transforms as transforms
 
 import numpy as np
 from tqdm.auto import tqdm
-import pandas as pd
 import matplotlib.pyplot as plt
 import random
 
 from senet import SENet34, SENetBottleneck34
-from resnet import ResNet34
+from resnet import ResNet34, ResNetBottleneck34
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
@@ -273,36 +271,26 @@ def get_model(device, args, classes):
         )
     elif args.resnet_model:
         model = ResNet34()
+    elif args.resnet_model_bottleneck:
+        model = ResNetBottleneck34(args.dropout)
+    elif args.resnet_model_adjustable:
+        k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
+        model = ResNet34(args.dropout, k_list)
     elif args.resnet_model_squeeze_excitation:
         model = SENet34()
     elif args.resnet_model_squeeze_excitation_bottleneck:
         model = SENetBottleneck34()
     elif args.resnet_model_squeeze_excitation_adjustable:
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = ResNetModel(
-            block=SqueezeExcitationBlockFullBasic,
-            num_classes=len(classes),
-            k_list=k_list,
-            dropout=args.dropout
-        )
-    elif args.resnet_model_bottleneck:
-        model = ResNetModel(
-            block=BottleneckBlock,
-            num_classes=len(classes),
-            dropout=args.dropout
-        )
-    elif args.resnet_model_adjustable:
-        k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = ResNetModel(
-            num_classes=len(classes),
-            k_list=k_list,
-            dropout=args.dropout
-        )
+        model = SENet34(args.dropout, k_list)
     elif args.resnet_pytorch:
         model = torchvision.models.resnet34()
         model.fc = nn.Linear(model.fc.in_features, len(classes))
     model.to(device)
+    total_parameters = sum(p.numel() for p in model.parameters())
+    print(f"Total number of parameters: {total_parameters}")
     return model
+
 
 def get_optimizer(lr, args, model, momentum=.9):
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=args.l2_decay)
