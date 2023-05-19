@@ -61,6 +61,8 @@ class SqueezeExcitationBlockBasic(nn.Module):
     
     
 class SqueezeExcitationBlockBottleneck(nn.Module):
+    expansion = 4
+
     def __init__(self, in_channels, out_channels, initial_stride=1, k_l=1):
         super(SqueezeExcitationBlockBottleneck, self).__init__()
 
@@ -98,14 +100,23 @@ class SqueezeExcitationBlockBottleneck(nn.Module):
 
 
 class SENet(nn.Module):
-    def _make_layer(self, block, planes, num_blocks, stride):
+    def _make_layer(self, block, planes, num_blocks, stride, k_list=None):
         layers = [block(self.in_planes, planes, stride)]
         self.in_planes = planes * block.expansion
-        for _ in range(1, num_blocks):
-            layers.append(block(self.in_planes, planes, stride=1))
+        k_sum = 0
+        for b in range(1, num_blocks):
+            layers.append(block(self.in_planes, planes, stride=1, k_l=k_list[k_sum:k_sum + num_blocks]))
+            k_sum += num_blocks
         return nn.Sequential(*layers)
 
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(
+            self,
+            block,
+            num_blocks,
+            num_classes=10,
+            dropout=0.0,
+            k_list=None
+    ):
         super(SENet, self).__init__()
         self.in_planes = 64
 
@@ -114,12 +125,13 @@ class SENet(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(),
         )
-        self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1, k_list=k_list)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2, k_list=k_list)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2, k_list=k_list)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2, k_list=k_list)
         self.linear = nn.Linear(512, num_classes)
         self.avgp = nn.AvgPool2d(4)
+        self.dropout = nn.Dropout2d(dropout)
 
     def forward(self, x):
         y = self.initial_block(x)
@@ -128,22 +140,31 @@ class SENet(nn.Module):
         y = self.layer3(y)
         y = self.layer4(y)
         y = self.avgp(y)
+        y = self.dropout(y)
         y = y.view(y.size(0), -1)
         y = self.linear(y)
         return y
 
 
-def SENet18():
-    return SENet(SqueezeExcitationBlockBasic, [2, 2, 2, 2])
+def SENet18(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 8
+    return SENet(SqueezeExcitationBlockBasic, [2, 2, 2, 2], dropout, k_list)
 
 
-def SENet34():
-    return SENet(SqueezeExcitationBlockBasic, [3, 4, 6, 3])
+def SENet34(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 16
+    return SENet(SqueezeExcitationBlockBasic, [3, 4, 6, 3], dropout, k_list)
 
 
-def SENetBottleneck18():
-    return SENet(SqueezeExcitationBlockBottleneck, [2, 2, 2, 2])
+def SENetBottleneck18(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 8
+    return SENet(SqueezeExcitationBlockBottleneck, [2, 2, 2, 2], dropout, k_list)
 
 
-def SENetBottleneck34():
-    return SENet(SqueezeExcitationBlockBottleneck, [3, 4, 6, 3])
+def SENetBottleneck34(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 16
+    return SENet(SqueezeExcitationBlockBottleneck, [3, 4, 6, 3], dropout, k_list)
