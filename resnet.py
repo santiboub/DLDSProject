@@ -124,7 +124,19 @@ def ResNet18(dropout=0.0, k_list=None):
     return ResNet(ResnetBlockBasic, [2, 2, 2, 2], dropout, k_list)
 
 
+def ResNetBottleneck18(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 8
+    return ResNet(ResnetBlockBottleneck, [2, 2, 2, 2], dropout, k_list)
+
+
 def ResNet34(dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 16
     return ResNet(ResnetBlockBasic, [3, 4, 6, 3], dropout, k_list)
+
+
+def ResNetBottleneck34(dropout=0.0, k_list=None):
+    if k_list is None:
+        k_list = [1.] * 16
+    return ResNet(ResnetBlockBottleneck, [3, 4, 6, 3], dropout, k_list)
