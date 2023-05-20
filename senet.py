@@ -63,13 +63,13 @@ class SqueezeExcitationBlockBasic(nn.Module):
 class SqueezeExcitationBlockBottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, in_channels, out_channels, initial_stride=1, k_l=1):
+    def __init__(self, in_channels, out_channels, stride=1, k_l=1):
         super(SqueezeExcitationBlockBottleneck, self).__init__()
 
         reduced_channels = out_channels // 4
 
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, reduced_channels, kernel_size=1, stride=initial_stride, bias=False),
+            nn.Conv2d(in_channels, reduced_channels, kernel_size=1, stride=stride, bias=False),
             nn.BatchNorm2d(reduced_channels),
             nn.ReLU(inplace=True)
         )
