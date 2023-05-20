@@ -23,6 +23,8 @@ from resnet import ResNet34, ResNetBottleneck34
 from baseline import BaselineModel, BaselineModelModifiedBNDropoutOrder
 from loss import SymmetricCrossEntropyLoss, LabelSmoothingCrossEntropyLoss
 
+from fastai.vision.all import *
+
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
 PLOT_FILENAME = "baseline.pdf"
@@ -159,19 +161,6 @@ def get_path(folderpath, filename, epoch):
 def load_data(base_augmentation=False, random_augmentation=False, norm_m0_sd1=False, dataset=torchvision.datasets.CIFAR10, label_noise_probability=0.0):
     trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     classes = trainset.classes
-    
-    def contaminate_label(label, probability):
-        if np.random.rand() < probability:
-            noisy_label = np.random.randint(len(classes), size=1)[0]
-            while noisy_label == label:
-                noisy_label = np.random.randint(len(classes), size=1)[0]
-            return noisy_label
-        return label
-
-    for i in range(len(trainset)):
-        label = trainset[i][1]
-        noisy_label = contaminate_label(label, label_noise_probability)
-        trainset.targets[i] = noisy_label
 
     train_mean = trainset.data.mean(axis=(0, 1, 2))
     train_std = trainset.data.std(axis=(0, 1, 2))
@@ -207,6 +196,19 @@ def load_data(base_augmentation=False, random_augmentation=False, norm_m0_sd1=Fa
         transform=transforms.Compose(transform_train),
         download=True
     )
+
+    def contaminate_label(label, probability):
+        if np.random.rand() < probability:
+            noisy_label = np.random.randint(len(classes), size=1)[0]
+            while noisy_label == label:
+                noisy_label = np.random.randint(len(classes), size=1)[0]
+            return noisy_label
+        return label
+
+    for i in range(len(trainset)):
+        label = trainset[i][1]
+        noisy_label = contaminate_label(label, label_noise_probability)
+        trainset.targets[i] = noisy_label
 
     testset = dataset(
         root='./data', 
@@ -265,7 +267,7 @@ def parse_arguments():
                                  "val_loss_plateau"],
                         default="default", help="Select a mode")
 
-    parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100'], default='CIFAR10',
+    parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100', 'Imagenette'], default='CIFAR10',
                         help='choose a training/test data set')
     parser.add_argument("-bs", "--batch_size", type=int, default=100, metavar=("SIZE"), help="Set the batch size")
 
@@ -360,6 +362,29 @@ def get_optimizer(lr, args, model, momentum=.9):
     return optimizer
 
 
+def get_dataset(args):
+    dataset = None
+
+    if args.dataset == 'CIFAR10':
+        dataset = torchvision.datasets.CIFAR10
+        return dataset
+    elif args.dataset == 'CIFAR100':
+        dataset = torchvision.datasets.CIFAR100
+        return dataset
+    elif args.dataset == 'Imagenette':
+        path = untar_data(URLs.IMAGENETTE_160)
+        dls = ImageDataLoaders.from_folder(path, train='train', valid='val')
+        dls.show_batch()
+
+        train_loader = dls.train
+        val_loader = dls.val
+
+        dataset = torchvision.datasets.ImageNet
+        return dataset
+
+
+
+
 if __name__ == "__main__":
     validation_size = 5000
     args = parse_arguments()
@@ -380,7 +405,7 @@ if __name__ == "__main__":
         args.apply_augmentation, 
         args.apply_random_augmentation, 
         args.norm_m0_sd1, 
-        torchvision.datasets.CIFAR100 if args.dataset == 'CIFAR100' else torchvision.datasets.CIFAR10,
+        get_dataset(args),
         args.label_noise_probability
     )
 
