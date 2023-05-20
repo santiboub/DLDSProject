@@ -157,19 +157,19 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
     trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     classes = trainset.classes
 
-    #train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
-    #train_std = trainset.data.std(axis=(0, 1, 2)) / 255
+    train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
+    train_std = trainset.data.std(axis=(0, 1, 2)) / 255
 
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize(train_mean, train_std),
     ])
 
     transform_test = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize(train_mean, train_std),
     ])
 
     trainset = dataset(
