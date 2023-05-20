@@ -146,25 +146,25 @@ class SENet(nn.Module):
         return y
 
 
-def SENet18(dropout=0.0, k_list=None):
+def SENet18(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 8
-    return SENet(SqueezeExcitationBlockBasic, [2, 2, 2, 2], dropout=dropout, k_list=k_list)
+    return SENet(SqueezeExcitationBlockBasic, [2, 2, 2, 2], num_classes=num_classes, dropout=dropout, k_list=k_list)
 
 
-def SENet34(dropout=0.0, k_list=None):
+def SENet34(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 16
-    return SENet(SqueezeExcitationBlockBasic, [3, 4, 6, 3], dropout=dropout, k_list=k_list)
+    return SENet(SqueezeExcitationBlockBasic, [3, 4, 6, 3], num_classes=num_classes, dropout=dropout, k_list=k_list)
 
 
-def SENetBottleneck18(dropout=0.0, k_list=None):
+def SENetBottleneck18(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 8
-    return SENet(SqueezeExcitationBlockBottleneck, [2, 2, 2, 2], dropout=dropout, k_list=k_list)
+    return SENet(SqueezeExcitationBlockBottleneck, [2, 2, 2, 2], num_classes=num_classes, dropout=dropout, k_list=k_list)
 
 
-def SENetBottleneck34(dropout=0.0, k_list=None):
+def SENetBottleneck34(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 16
-    return SENet(SqueezeExcitationBlockBottleneck, [3, 4, 6, 3], dropout=dropout, k_list=k_list)
+    return SENet(SqueezeExcitationBlockBottleneck, [3, 4, 6, 3], num_classes=num_classes, dropout=dropout, k_list=k_list)

@@ -23,7 +23,7 @@ from resnet import ResNet34, ResNetBottleneck34
 from baseline import BaselineModel, BaselineModelModifiedBNDropoutOrder
 from loss import SymmetricCrossEntropyLoss, LabelSmoothingCrossEntropyLoss
 
-from fastai.vision.all import *
+#from fastai.vision.all import *
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
@@ -319,24 +319,24 @@ def get_model(device, args, classes):
         )
     elif args.resnet_model:
         print("Using ResNet model...")
-        model = ResNet34()
+        model = ResNet34(num_classes=len(classes))
     elif args.resnet_model_bottleneck:
         print("Using ResNet model with bottleneck blocks...")
-        model = ResNetBottleneck34(args.dropout)
+        model = ResNetBottleneck34(num_classes=len(classes), dropout=args.dropout)
     elif args.resnet_model_adjustable:
         print("Using ResNet model with adjustable residual connection...")
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = ResNet34(args.dropout, k_list)
+        model = ResNet34(num_classes=len(classes), dropout=args.dropout, k_list=k_list)
     elif args.resnet_model_squeeze_excitation:
         print("Using ResNet model with SqueezeExcitation blocks...")
-        model = SENet34()
+        model = SENet34(num_classes=len(classes))
     elif args.resnet_model_squeeze_excitation_bottleneck:
         print("Using ResNet model with SqueezeExcitation blocks with bottleneck...")
-        model = SENetBottleneck34()
+        model = SENetBottleneck34(num_classes=len(classes))
     elif args.resnet_model_squeeze_excitation_adjustable:
         print("Using ResNet model with SqueezeExcitation blocks with bottleneck, adjustable residual connection...")
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = SENet34(args.dropout, k_list)
+        model = SENet34(num_classes=len(classes), dropout=args.dropout, k_list=k_list)
     elif args.resnet_pytorch:
         print("Using pre-defined ResNet model from PyTorch...")
         model = torchvision.models.resnet34()
@@ -372,12 +372,12 @@ def get_dataset(args):
         dataset = torchvision.datasets.CIFAR100
         return dataset
     elif args.dataset == 'Imagenette':
-        path = untar_data(URLs.IMAGENETTE_160)
-        dls = ImageDataLoaders.from_folder(path, train='train', valid='val')
-        dls.show_batch()
+        #path = untar_data(URLs.IMAGENETTE_160)
+        #dls = ImageDataLoaders.from_folder(path, train='train', valid='val')
+        #dls.show_batch()
 
-        train_loader = dls.train
-        val_loader = dls.val
+        #train_loader = dls.train
+        #val_loader = dls.val
 
         dataset = torchvision.datasets.ImageNet
         return dataset
