@@ -60,6 +60,13 @@ class ResnetBlockBottleneck(nn.Module):
             nn.Conv2d(reduced_channels, out_channels*self.expansion, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(out_channels*self.expansion)
         )
+        self.skip_connection = nn.Sequential()
+        if in_channels != out_channels*self.expansion:
+            # adjust skip connection dimension (dotted lines Lecture 7 slide 37)
+            self.skip_connection = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels*self.expansion, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels*self.expansion)
+            )
 
         self.relu = nn.ReLU(inplace=True)
         self.k_l = k_l
@@ -69,7 +76,7 @@ class ResnetBlockBottleneck(nn.Module):
         y = self.conv2(y)
         y = self.conv3(y)
 
-        y += self.k_l * y
+        y += self.k_l * self.skip_connection(x)
         return self.relu(y)
 
 
