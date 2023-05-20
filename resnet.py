@@ -120,25 +120,25 @@ class ResNet(nn.Module):
         return y
 
 
-def ResNet18(dropout=0.0, k_list=None):
+def ResNet18(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 8
-    return ResNet(ResnetBlockBasic, [2, 2, 2, 2], dropout=dropout, k_list=k_list)
+    return ResNet(ResnetBlockBasic, [2, 2, 2, 2], num_classes=num_classes, dropout=dropout, k_list=k_list)
 
 
-def ResNetBottleneck18(dropout=0.0, k_list=None):
+def ResNetBottleneck18(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 8
-    return ResNet(ResnetBlockBottleneck, [2, 2, 2, 2], dropout=dropout, k_list=k_list)
+    return ResNet(ResnetBlockBottleneck, [2, 2, 2, 2], num_classes=num_classes, dropout=dropout, k_list=k_list)
 
 
-def ResNet34(dropout=0.0, k_list=None):
+def ResNet34(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 16
-    return ResNet(ResnetBlockBasic, [3, 4, 6, 3], dropout=dropout, k_list=k_list)
+    return ResNet(ResnetBlockBasic, [3, 4, 6, 3], num_classes=num_classes, dropout=dropout, k_list=k_list)
 
 
-def ResNetBottleneck34(dropout=0.0, k_list=None):
+def ResNetBottleneck34(num_classes, dropout=0.0, k_list=None):
     if k_list is None:
         k_list = [1.] * 16
-    return ResNet(ResnetBlockBottleneck, [3, 4, 6, 3], dropout=dropout, k_list=k_list)
+    return ResNet(ResnetBlockBottleneck, [3, 4, 6, 3], num_classes=num_classes, dropout=dropout, k_list=k_list)
