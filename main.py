@@ -157,6 +157,9 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
     trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     classes = trainset.classes
 
+    #train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
+    #train_std = trainset.data.std(axis=(0, 1, 2)) / 255
+
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -210,7 +213,7 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
 def parse_arguments():
     parser = argparse.ArgumentParser()
     model_group = parser.add_mutually_exclusive_group()
-    model_group.add_argument('--baseline_model', action='store_true', default=True, help='Use baseline model')
+    model_group.add_argument('--baseline_model', action='store_true', help='Use baseline model')
     model_group.add_argument('--other_model', action='store_true', help='Use other model')
     model_group.add_argument('--baseline_model_bn_dropout_reversed', action='store_true',
                              help='using a different order for bn and dropout. Dropout is now applied twice within each layer!')
