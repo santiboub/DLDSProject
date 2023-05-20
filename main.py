@@ -23,7 +23,7 @@ from resnet import ResNet34, ResNetBottleneck34
 from baseline import BaselineModel, BaselineModelModifiedBNDropoutOrder
 from loss import SymmetricCrossEntropyLoss, LabelSmoothingCrossEntropyLoss
 
-from fastai.vision.all import *
+#from fastai.vision.all import *
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
@@ -372,12 +372,12 @@ def get_dataset(args):
         dataset = torchvision.datasets.CIFAR100
         return dataset
     elif args.dataset == 'Imagenette':
-        path = untar_data(URLs.IMAGENETTE_160)
-        dls = ImageDataLoaders.from_folder(path, train='train', valid='val')
-        dls.show_batch()
+        #path = untar_data(URLs.IMAGENETTE_160)
+        #dls = ImageDataLoaders.from_folder(path, train='train', valid='val')
+        #dls.show_batch()
 
-        train_loader = dls.train
-        val_loader = dls.val
+        #train_loader = dls.train
+        #val_loader = dls.val
 
         dataset = torchvision.datasets.ImageNet
         return dataset
