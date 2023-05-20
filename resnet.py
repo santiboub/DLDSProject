@@ -77,7 +77,7 @@ class ResNet(nn.Module):
         self.in_planes = planes * block.expansion
         k_sum = 0
         for b in range(1, num_blocks):
-            layers.append(block(self.in_planes, planes, stride=1, k_l=k_list[k_sum:k_sum+num_blocks]))
+            layers.append(block(self.in_planes, planes, stride=1, k_l=k_list[b - 1]))
             k_sum += num_blocks
         return nn.Sequential(*layers)
 
@@ -97,10 +97,11 @@ class ResNet(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(),
         )
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1, k_list=k_list)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2, k_list=k_list)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2, k_list=k_list)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2, k_list=k_list)
+
+        self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1, k_list=k_list[0:num_blocks[0]])
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2, k_list=k_list[num_blocks[0]:sum(num_blocks[0:2])])
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2, k_list=k_list[sum(num_blocks[0:2]):sum(num_blocks[0:3])])
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2, k_list=k_list[sum(num_blocks[0:3]):sum(num_blocks[0:4])])
         self.linear = nn.Linear(512, num_classes)
         self.avgp = nn.AvgPool2d(4)
         self.dropout = nn.Dropout2d(dropout)
