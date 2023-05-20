@@ -37,7 +37,7 @@ class ResnetBlockBasic(nn.Module):
 
 
 class ResnetBlockBottleneck(nn.Module):
-    expansion = 1
+    expansion = 4
 
     def __init__(self, in_channels, out_channels, stride=1, k_l=1):
         super(ResnetBlockBottleneck, self).__init__()
@@ -57,8 +57,8 @@ class ResnetBlockBottleneck(nn.Module):
         )
 
         self.conv3 = nn.Sequential(
-            nn.Conv2d(reduced_channels, out_channels, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm2d(out_channels)
+            nn.Conv2d(reduced_channels, out_channels*self.expansion, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(out_channels*self.expansion)
         )
 
         self.relu = nn.ReLU(inplace=True)
