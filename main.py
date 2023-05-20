@@ -319,24 +319,24 @@ def get_model(device, args, classes):
         )
     elif args.resnet_model:
         print("Using ResNet model...")
-        model = ResNet34(len(classes))
+        model = ResNet34(num_classes=len(classes))
     elif args.resnet_model_bottleneck:
         print("Using ResNet model with bottleneck blocks...")
-        model = ResNetBottleneck34(len(classes), args.dropout)
+        model = ResNetBottleneck34(num_classes=len(classes), dropout=args.dropout)
     elif args.resnet_model_adjustable:
         print("Using ResNet model with adjustable residual connection...")
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = ResNet34(len(classes), args.dropout, k_list)
+        model = ResNet34(num_classes=len(classes), dropout=args.dropout, k_list=k_list)
     elif args.resnet_model_squeeze_excitation:
         print("Using ResNet model with SqueezeExcitation blocks...")
-        model = SENet34(len(classes))
+        model = SENet34(num_classes=len(classes))
     elif args.resnet_model_squeeze_excitation_bottleneck:
         print("Using ResNet model with SqueezeExcitation blocks with bottleneck...")
-        model = SENetBottleneck34(len(classes))
+        model = SENetBottleneck34(num_classes=len(classes))
     elif args.resnet_model_squeeze_excitation_adjustable:
         print("Using ResNet model with SqueezeExcitation blocks with bottleneck, adjustable residual connection...")
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = SENet34(len(classes), args.dropout, k_list)
+        model = SENet34(num_classes=len(classes), dropout=args.dropout, k_list=k_list)
     elif args.resnet_pytorch:
         print("Using pre-defined ResNet model from PyTorch...")
         model = torchvision.models.resnet34()
