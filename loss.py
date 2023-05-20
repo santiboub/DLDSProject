@@ -9,7 +9,7 @@ class SymmetricCrossEntropyLoss(nn.Module):
         self.A = A
         self.num_classes = num_classes
 
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=1)
         self.cross_entropy_loss = nn.CrossEntropyLoss()
 
     def forward(self, logits, targets):
@@ -19,8 +19,8 @@ class SymmetricCrossEntropyLoss(nn.Module):
         predictions = self.softmax(logits)
         predictions = torch.clamp(predictions, min=eps, max=1.0 - eps)
         
-        label_one_hot = nn.functional.one_hot(targets, self.num_classes).float().to(self.device)
-        label_one_hot = torch.clamp(label_one_hot, min=torch.pow(10, self.A), max=1.0)
+        label_one_hot = nn.functional.one_hot(targets, self.num_classes).float()
+        label_one_hot = torch.clamp(label_one_hot, min=pow(10, self.A), max=1.0)
         
         reverse_cross_entropy_loss = torch.mean(-1*torch.sum(predictions * torch.log(label_one_hot), dim=1))
 
@@ -33,7 +33,6 @@ class LabelSmoothingCrossEntropyLoss(nn.Module):
         self.smoothing = smoothing
         self.num_classes = num_classes
 
-        self.softmax = nn.Softmax()
         self.cross_entropy_loss = nn.CrossEntropyLoss()
 
     def forward(self, logits, targets):
