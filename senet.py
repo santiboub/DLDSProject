@@ -32,7 +32,7 @@ class SqueezeExcitationBlockBasic(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.conv2 = nn.Sequential(
@@ -71,13 +71,13 @@ class SqueezeExcitationBlockBottleneck(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, reduced_channels, kernel_size=1, stride=initial_stride, bias=False),
             nn.BatchNorm2d(reduced_channels),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.conv2 = nn.Sequential(
             nn.Conv2d(reduced_channels, reduced_channels, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(reduced_channels),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.conv3 = nn.Sequential(
@@ -86,7 +86,7 @@ class SqueezeExcitationBlockBottleneck(nn.Module):
         )
         self.se = SqueezeExcitationLayer(out_channels, None, reduction=16)
 
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.k_l = k_l
 
     def forward(self, x):

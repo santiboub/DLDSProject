@@ -569,8 +569,9 @@ def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=Fals
                 transforms.ToTensor(),
                 transforms.Normalize(train_mean, train_std),
                 rand_augment_transform(
-                config_str='rand-m9-mstd0.5', 
-                hparams={'img_mean': (int(train_mean_unnorm[0]), int(train_mean_unnorm[1]), int(train_mean_unnorm[2]))}),
+                        config_str='rand-m9-mstd0.5', 
+                        hparams={'img_mean': (int(train_mean_unnorm[0]), int(train_mean_unnorm[1]), int(train_mean_unnorm[2]))}
+                ),
             ])
         
         transform_norm = transforms.Compose([

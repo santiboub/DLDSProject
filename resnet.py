@@ -10,7 +10,7 @@ class ResnetBlockBasic(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.conv2 = nn.Sequential(
@@ -26,7 +26,7 @@ class ResnetBlockBasic(nn.Module):
                 nn.BatchNorm2d(out_channels)
             )
 
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.k_l = k_l
 
     def forward(self, x):
@@ -37,6 +37,8 @@ class ResnetBlockBasic(nn.Module):
 
 
 class ResnetBlockBottleneck(nn.Module):
+    expansion = 4
+
     def __init__(self, in_channels, out_channels, initial_stride=1, k_l=1):
         super(ResnetBlockBottleneck, self).__init__()
 
@@ -45,13 +47,13 @@ class ResnetBlockBottleneck(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, reduced_channels, kernel_size=1, stride=initial_stride, bias=False),
             nn.BatchNorm2d(reduced_channels),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.conv2 = nn.Sequential(
             nn.Conv2d(reduced_channels, reduced_channels, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(reduced_channels),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.conv3 = nn.Sequential(
@@ -59,7 +61,7 @@ class ResnetBlockBottleneck(nn.Module):
             nn.BatchNorm2d(out_channels)
         )
 
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.k_l = k_l
 
     def forward(self, x):
@@ -95,9 +97,8 @@ class ResNet(nn.Module):
         self.initial_block = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(64),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
         )
-
         self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1, k_list=k_list[0:num_blocks[0]])
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2, k_list=k_list[num_blocks[0]:sum(num_blocks[0:2])])
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2, k_list=k_list[sum(num_blocks[0:2]):sum(num_blocks[0:3])])

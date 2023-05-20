@@ -10,10 +10,10 @@ class BaselineModel(nn.Module):
 
         self.block1 = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.BatchNorm2d(32) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(dropout)
@@ -22,10 +22,10 @@ class BaselineModel(nn.Module):
 
         self.block2 = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(dropout + increased_dropout)
@@ -34,10 +34,10 @@ class BaselineModel(nn.Module):
 
         self.block3 = nn.Sequential(
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(dropout + increased_dropout * 2)
@@ -79,11 +79,11 @@ class BaselineModelModifiedBNDropoutOrder(nn.Module):
 
         self.block1 = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout(dropout / 2),
             nn.BatchNorm2d(32) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout(dropout / 2),
             nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2)
@@ -92,11 +92,11 @@ class BaselineModelModifiedBNDropoutOrder(nn.Module):
 
         self.block2 = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout((dropout + increased_dropout) / 2),
             nn.BatchNorm2d(64) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout((dropout + increased_dropout) / 2),
             nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2)
@@ -105,11 +105,11 @@ class BaselineModelModifiedBNDropoutOrder(nn.Module):
 
         self.block3 = nn.Sequential(
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout((dropout + increased_dropout * 2) / 2),
             nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding='same'),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout((dropout + increased_dropout * 2) / 2),
             nn.BatchNorm2d(128) if batch_norm else nn.Identity(),
             nn.MaxPool2d(kernel_size=2, stride=2)
@@ -118,7 +118,7 @@ class BaselineModelModifiedBNDropoutOrder(nn.Module):
 
         self.fc = nn.Sequential(
             nn.Linear(2048, 128),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout(dropout + increased_dropout * 3),
             nn.BatchNorm1d(128) if batch_norm else nn.Identity(),
             nn.Linear(128, num_classes)

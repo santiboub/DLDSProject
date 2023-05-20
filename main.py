@@ -10,6 +10,8 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts, ReduceLROnPlateau
 import torchvision
 import torchvision.transforms as transforms
+from timm.data.auto_augment import rand_augment_transform
+
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -19,6 +21,7 @@ import random
 from senet import SENet34, SENetBottleneck34
 from resnet import ResNet34, ResNetBottleneck34
 from baseline import BaselineModel, BaselineModelModifiedBNDropoutOrder
+from loss import SymmetricCrossEntropyLoss, LabelSmoothingCrossEntropyLoss
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
@@ -153,36 +156,62 @@ def get_path(folderpath, filename, epoch):
     return os.path.join(epoch_path, filename)
 
 
-def load_data(apply_augmentation=False, apply_random_aug=False, norm_m0_sd1=False, dataset=torchvision.datasets.CIFAR10):
+def load_data(base_augmentation=False, random_augmentation=False, norm_m0_sd1=False, dataset=torchvision.datasets.CIFAR10, label_noise_probability=0.0):
     trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     classes = trainset.classes
+    
+    def contaminate_label(label, probability):
+        if np.random.rand() < probability:
+            noisy_label = np.random.randint(len(classes), size=1)[0]
+            while noisy_label == label:
+                noisy_label = np.random.randint(len(classes), size=1)[0]
+            return noisy_label
+        return label
 
-    train_mean = trainset.data.mean(axis=(0, 1, 2)) / 255
-    train_std = trainset.data.std(axis=(0, 1, 2)) / 255
+    for i in range(len(trainset)):
+        label = trainset[i][1]
+        noisy_label = contaminate_label(label, label_noise_probability)
+        trainset.targets[i] = noisy_label
 
-    transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(train_mean, train_std),
-    ])
+    train_mean = trainset.data.mean(axis=(0, 1, 2))
+    train_std = trainset.data.std(axis=(0, 1, 2))
 
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(train_mean, train_std),
-    ])
+    transform_train = []
+    transform_test = []
+
+    if base_augmentation:
+        transform_train.append(transforms.RandomCrop(32, padding=4))
+        transform_train.append(transforms.RandomHorizontalFlip())
+    elif random_augmentation:
+        transform_train.append(
+            rand_augment_transform(
+                config_str='rand-m9-mstd0.5', 
+                hparams={
+                    'img_mean': (int(train_mean[0]), int(train_mean[1]), int(train_mean[2]))
+                }
+            )
+        )
+
+    transform_train.append(transforms.ToTensor())
+    transform_test.append(transforms.ToTensor())
+
+    if norm_m0_sd1:
+        train_mean /= 255
+        train_std /= 255
+        transform_train.append(transforms.Normalize(train_mean, train_std))
+        transform_test.append(transforms.Normalize(train_mean, train_std))
 
     trainset = dataset(
         root='./data', 
         train=True,
-        transform=transform_train,
+        transform=transforms.Compose(transform_train),
         download=True
-        )
+    )
 
     testset = dataset(
         root='./data', 
         train=False,
-        transform=transform_test,
+        transform=transforms.Compose(transform_test),
         download=True
     )
 
@@ -225,7 +254,7 @@ def parse_arguments():
     model_group.add_argument('--resnet_model_squeeze_excitation_bottleneck', action='store_true',
                              help='Use the ResNet model with SqueezeExciation blocks with bottleneck')
     model_group.add_argument('--resnet_model_squeeze_excitation_adjustable', action='store_true',
-                             help='Use the ResNet model with SqueezeExciation blocks with bottleneck')
+                             help='Use the ResNet model with SqueezeExciation blocks with bottleneck, adjustable residual connection')
     model_group.add_argument('--resnet_model_adjustable', action='store_true',
                              help='Use the ResNet model architecture with adjustable residual connection')
     model_group.add_argument('--resnet_pytorch', action='store_true',
@@ -238,13 +267,13 @@ def parse_arguments():
 
     parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100'], default='CIFAR10',
                         help='choose a training/test data set')
-    parser.add_argument("-bs", "--batch_size", type=int, default=100, help="Set the batch size")
+    parser.add_argument("-bs", "--batch_size", type=int, default=100, metavar=("SIZE"), help="Set the batch size")
 
     parser.add_argument("-l", "--load", nargs=2, metavar=("FOLDERPATH", "EPOCH"), help="Load data from folder")
-    parser.add_argument("-d", "--dropout", type=float, default=0.0, help="Dropout probability")
-    parser.add_argument("-id", "--increased_dropout", type=float, default=0.0, help="Increased dropout probability")
-    parser.add_argument("-w", "--l2_decay", type=float, default=0.0, help="Apply L2 weight regularization")
-    parser.add_argument("-e", "--n_epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("-d", "--dropout", type=float, default=0.0, metavar=("PROBABILITY"), help="Dropout probability")
+    parser.add_argument("-id", "--increased_dropout", type=float, default=0.0, metavar=("PROBABILITY"), help="Increased dropout probability")
+    parser.add_argument("-w", "--l2_decay", type=float, default=0.0, metavar=("WEIGHT_DECAY"), help="Apply L2 weight regularization")
+    parser.add_argument("-e", "--n_epochs", type=int, default=10, metavar=("EPOCH"), help="Number of epochs")
 
     augmentation_group = parser.add_mutually_exclusive_group()
     augmentation_group.add_argument("-a", "--apply_augmentation", action="store_true",
@@ -254,14 +283,20 @@ def parse_arguments():
 
     parser.add_argument("-n", "--norm_m0_sd1", action="store_true",
                         help="Normalize to have 0 mean and standard deviation 1")
-    parser.add_argument("--save_every", type=int, default=5, help="How often to save (in epochs)")
+    parser.add_argument("--save_every", type=int, default=5, metavar=("EPOCHS"), help="How often to save (in epochs)")
     parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
 
-    parser.add_argument("-lr", "--learning_rate", type=float, default=0.001, help="Intial learning rate")
+    parser.add_argument("-lr", "--learning_rate", type=float, default=0.001, metavar=("LEARNING RATE"), help="Intial learning rate")
 
     parser.add_argument("-ad", "--adam", action="store_true", help="Use Adam optimizer")
     parser.add_argument("-aw", "--adamw", action="store_true", help="Use AdamW optimizer")
     parser.add_argument("-rms", "--rmsprop", action="store_true", help="Use RMSprop optimizer")
+
+    parser.add_argument("-ln", "--label_noise_probability", type=float, default=0, metavar=("PROBABILITY"), help="contaminate the labels")
+    
+    loss_group = parser.add_mutually_exclusive_group()
+    loss_group.add_argument("-sce", "--symmetric_cross_entropy_loss", action="store_true", help="Use the symmetric cross entropy loss function")
+    loss_group.add_argument("-lsce", "--label_smoothing_cross_entropy_loss", type=float, metavar=("SMOOTHING"), help="Use the smoothing loss regularization cross entropy loss")
 
     return parser.parse_args()
 
@@ -281,20 +316,27 @@ def get_model(device, args, classes):
             num_classes=len(classes)
         )
     elif args.resnet_model:
+        print("Using ResNet model...")
         model = ResNet34()
     elif args.resnet_model_bottleneck:
+        print("Using ResNet model with bottleneck blocks...")
         model = ResNetBottleneck34(args.dropout)
     elif args.resnet_model_adjustable:
+        print("Using ResNet model with adjustable residual connection...")
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
         model = ResNet34(args.dropout, k_list)
     elif args.resnet_model_squeeze_excitation:
+        print("Using ResNet model with SqueezeExcitation blocks...")
         model = SENet34()
     elif args.resnet_model_squeeze_excitation_bottleneck:
+        print("Using ResNet model with SqueezeExcitation blocks with bottleneck...")
         model = SENetBottleneck34()
     elif args.resnet_model_squeeze_excitation_adjustable:
+        print("Using ResNet model with SqueezeExcitation blocks with bottleneck, adjustable residual connection...")
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
         model = SENet34(args.dropout, k_list)
     elif args.resnet_pytorch:
+        print("Using pre-defined ResNet model from PyTorch...")
         model = torchvision.models.resnet34()
         model.fc = nn.Linear(model.fc.in_features, len(classes))
     model.to(device)
@@ -306,10 +348,13 @@ def get_model(device, args, classes):
 def get_optimizer(lr, args, model, momentum=.9):
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=args.l2_decay)
     if args.adam:
+        print("Using Adam optimizer...")
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=args.l2_decay)
     elif args.adamw:
+        print("Using AdamW optimizer...")
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=args.l2_decay)
     elif args.rmsprop:
+        print("Using RMSprop optimizer...")
         optimizer = torch.optim.RMSprop(model.parameters(), lr=lr, weight_decay=args.l2_decay, momentum=momentum)
 
     return optimizer
@@ -335,12 +380,23 @@ if __name__ == "__main__":
         args.apply_augmentation, 
         args.apply_random_augmentation, 
         args.norm_m0_sd1, 
-        torchvision.datasets.CIFAR100 if args.dataset == 'CIFAR100' else torchvision.datasets.CIFAR10
+        torchvision.datasets.CIFAR100 if args.dataset == 'CIFAR100' else torchvision.datasets.CIFAR10,
+        args.label_noise_probability
     )
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device}...")
     model = get_model(device, args, classes)
+
+    if args.symmetric_cross_entropy_loss:
+        print("Using Symmetric Cross Entropy Loss...")
+        loss_function = SymmetricCrossEntropyLoss(len(classes), alpha=0.1, beta=1.0, A=-4)
+    elif args.label_smoothing_cross_entropy_loss:
+        print("Using Label Smoothing Cross Entropy Loss...")
+        loss_function = LabelSmoothingCrossEntropyLoss(len(classes), smoothing=args.label_smoothing_cross_entropy_loss)
+    else:
+        print("Using Cross Entropy Loss...")
+        loss_function = nn.CrossEntropyLoss()
 
     history = ph.register(
         "history",
@@ -379,15 +435,17 @@ if __name__ == "__main__":
 
     if num_epochs - offset_epochs > 0:
         print(f"Training the network for {num_epochs - offset_epochs} {'more epochs' if offset_epochs > 0 else ''}...")
-        loss_function = nn.CrossEntropyLoss()
         lr = args.learning_rate
         optimizer = get_optimizer(lr, args, model)
 
         if args.scheduler == 'step':
+            print("Using StepLR scheduler...")
             lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
         elif args.scheduler == 'cosine_annealing+re-starts':
+            print("Using CosineAnnealingWarmRestarts scheduler...")
             lr_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=0.00001)
         elif args.scheduler == 'warm-up+cosine_annealing':
+            print("Using warm-up+cosine_annealing scheduler...")
             n_warm_up_epochs = 10
             n_annealing_epochs = num_epochs - n_warm_up_epochs
             eta_min = 0.0001
@@ -398,8 +456,10 @@ if __name__ == "__main__":
 
             warm_up_and_cosine_annealing = lambda epoch: warm_up_learning_rate(epoch) if epoch < n_warm_up_epochs else cosine_annealing(epoch - n_warm_up_epochs)
         elif args.scheduler == 'val_loss_plateau':
+            print("Using ReduceLROnPlateau scheduler...")
             lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
         else:
+            print("Using CosineAnnealingLR scheduler...")
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
         for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs, ascii=True):
