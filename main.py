@@ -28,6 +28,8 @@ from resnet import ResNet34, ResNetBottleneck34
 from baseline import BaselineModel, BaselineModelModifiedBNDropoutOrder
 from loss import SymmetricCrossEntropyLoss, LabelSmoothingCrossEntropyLoss
 
+from PIL import Image
+
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
 PLOT_FILENAME = "baseline.pdf"
@@ -440,8 +442,8 @@ class ImagenetteDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        sample, label = self.data[idx], self.targets[idx]
-
+        sample, label = Image.fromarray(self.data[idx]), self.targets[idx]
+        
         if self.transform:
             sample = self.transform(sample)
 
