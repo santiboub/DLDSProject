@@ -454,7 +454,9 @@ if __name__ == "__main__":
         plot_path = get_path(folder_path, PLOT_FILENAME, epochs)
         summarize_diagnostics(plot_path, history)
 
-        print(f"Test loss: {test_loss}")
+        print(f"Test loss: {test_loss}, Test accuracy: {test_acc}")
+        print(json.dumps(_test_acc_per_class))
+
         offset_epochs = epochs
         num_epochs += epochs
 
@@ -525,11 +527,11 @@ if __name__ == "__main__":
             
 
             if (epoch + 1) % args.save_every == 0:
-                tqdm.write(f'Saving the model after epoch: {epoch + 1}...')
+                # tqdm.write(f'Saving the model after epoch: {epoch + 1}...')
                 model_path = get_path(folder_path, MODEL_FILENAME, epoch + 1)
                 torch.save(model.state_dict(), model_path)
 
-                tqdm.write(f'Generating plots after epoch: {epoch + 1}...')
+                # tqdm.write(f'Generating plots after epoch: {epoch + 1}...')
                 plotpath = get_path(folder_path, PLOT_FILENAME, epoch + 1)
                 summarize_diagnostics(plotpath, history)
 
