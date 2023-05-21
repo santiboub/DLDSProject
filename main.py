@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 from fastai.data.external import untar_data, URLs
 from fastai.vision.data import ImageDataLoaders
-from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts, ReduceLROnPlateau
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts, ReduceLROnPlateau, LambdaLR
 import torchvision
 import torchvision.transforms as transforms
 from timm.data.auto_augment import rand_augment_transform
@@ -219,6 +219,8 @@ def load_data(base_augmentation=False, random_augmentation=False, norm_m0_sd1=Fa
         download=True
     )
 
+    validation_size = int(len(trainset) * .1)
+    print(validation_size)
     trainset, valset = torch.utils.data.random_split(trainset, [len(trainset) - validation_size, validation_size])
 
     trainloader = torch.utils.data.DataLoader(
@@ -266,7 +268,7 @@ def parse_arguments():
 
     parser.add_argument("-s", "--scheduler",
                         choices=["default", "step", "warm-up+cosine_annealing", "cosine_annealing+re-starts",
-                                 "val_loss_plateau"],
+                                 "val_loss_plateau", "cosine_annealing"],
                         default="default", help="Select a mode")
 
     parser.add_argument("-ds", "--dataset", choices=['CIFAR10', 'CIFAR100', 'Imagenette'], default='CIFAR10',
@@ -409,10 +411,10 @@ class ImagenetteDataset(Dataset):
 
             sample = sample.resize((32, 32))
 
-            self.data[idx] = torch.from_numpy(np.array(sample)).float()
+            self.data[idx] = np.array(sample)
             self.targets[idx] = label.item()
 
-        self.data = torch.stack(self.data, dim=0)
+        self.data = np.stack(self.data, axis=0)
 
     def __len__(self):
         if self.train:
@@ -427,14 +429,12 @@ class ImagenetteDataset(Dataset):
         sample, label = self.data[idx], self.targets[idx]
 
         if self.transform:
-            sample = sample.numpy()
             sample = self.transform(sample)
 
         return sample, label
 
 
 if __name__ == "__main__":
-    validation_size = 5000
     args = parse_arguments()
     batch_size = args.batch_size
 
@@ -533,9 +533,12 @@ if __name__ == "__main__":
         elif args.scheduler == 'val_loss_plateau':
             print("Using ReduceLROnPlateau scheduler...")
             lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
-        else:
+        elif args.scheduler == 'cosine_annealing':
             print("Using CosineAnnealingLR scheduler...")
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+        else:
+            print('Using the default fixed initial learning rate scheduler')
+            lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 1)
 
         for epoch in tqdm(range(offset_epochs, num_epochs), total=num_epochs - offset_epochs, ascii=True):
             model.train()
@@ -570,9 +573,8 @@ if __name__ == "__main__":
                     g['lr'] = warm_up_and_cosine_annealing(epoch)
             elif args.scheduler == 'val_loss_plateau':
                 lr_scheduler.step(val_loss)
-            elif args.scheduler != 'default':
+            else:
                 lr_scheduler.step()
-            
 
             if (epoch + 1) % args.save_every == 0:
                 # tqdm.write(f'Saving the model after epoch: {epoch + 1}...')
