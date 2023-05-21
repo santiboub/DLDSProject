@@ -160,7 +160,14 @@ def get_path(folderpath, filename, epoch):
     return os.path.join(epoch_path, filename)
 
 
-def load_data(base_augmentation=False, random_augmentation=False, norm_m0_sd1=False, dataset=torchvision.datasets.CIFAR10, label_noise_probability=0.0):
+def load_data(
+        base_augmentation=False,
+        random_augmentation=False,
+        norm_m0_sd1=False,
+        upsampling=False,
+        dataset=torchvision.datasets.CIFAR10,
+        label_noise_probability=0.0
+):
     trainset = dataset(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     classes = trainset.classes
 
@@ -169,6 +176,9 @@ def load_data(base_augmentation=False, random_augmentation=False, norm_m0_sd1=Fa
 
     transform_train = []
     transform_test = []
+
+    if upsampling:
+        transform_train.append(transforms.Resize(224))
 
     if base_augmentation:
         transform_train.append(transforms.RandomCrop(32, padding=4))
@@ -289,6 +299,7 @@ def parse_arguments():
 
     parser.add_argument("-n", "--norm_m0_sd1", action="store_true",
                         help="Normalize to have 0 mean and standard deviation 1")
+    parser.add_argument("-u", "--upsampling", action="store_true", help="Upsample to 224")
     parser.add_argument("--save_every", type=int, default=5, metavar=("EPOCHS"), help="How often to save (in epochs)")
     parser.add_argument("-bn", "--batch_norm", action="store_true", help="Use batch normalization")
 
@@ -452,7 +463,8 @@ if __name__ == "__main__":
     trainset, valset, testset, trainloader, valloader, testloader, classes = load_data(
         args.apply_augmentation, 
         args.apply_random_augmentation, 
-        args.norm_m0_sd1, 
+        args.norm_m0_sd1,
+        args.upsampling,
         get_dataset(args),
         args.label_noise_probability
     )
