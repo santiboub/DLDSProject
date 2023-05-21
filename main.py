@@ -7,6 +7,8 @@ import time
 
 import torch
 import torch.nn as nn
+from fastai.data.external import untar_data, URLs
+from fastai.vision.data import ImageDataLoaders
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts, ReduceLROnPlateau
 import torchvision
 import torchvision.transforms as transforms
@@ -14,6 +16,8 @@ from timm.data.auto_augment import rand_augment_transform
 
 
 import numpy as np
+from torch.utils.data import Dataset
+from torchvision.transforms import Resize
 from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 import random
@@ -22,8 +26,6 @@ from senet import SENet34, SENetBottleneck34
 from resnet import ResNet34, ResNetBottleneck34
 from baseline import BaselineModel, BaselineModelModifiedBNDropoutOrder
 from loss import SymmetricCrossEntropyLoss, LabelSmoothingCrossEntropyLoss
-
-#from fastai.vision.all import *
 
 MODEL_FILENAME = "baseline_model.pth"
 PICKLE_FILENAME = "data.pickle"
@@ -363,26 +365,72 @@ def get_optimizer(lr, args, model, momentum=.9):
 
 
 def get_dataset(args):
-    dataset = None
-
     if args.dataset == 'CIFAR10':
-        dataset = torchvision.datasets.CIFAR10
-        return dataset
+        return torchvision.datasets.CIFAR10
     elif args.dataset == 'CIFAR100':
-        dataset = torchvision.datasets.CIFAR100
-        return dataset
+        return torchvision.datasets.CIFAR100
     elif args.dataset == 'Imagenette':
-        #path = untar_data(URLs.IMAGENETTE_160)
-        #dls = ImageDataLoaders.from_folder(path, train='train', valid='val')
-        #dls.show_batch()
+        path = untar_data(URLs.IMAGENETTE_160)
+        dataloader = ImageDataLoaders.from_folder(path, train='train', valid='val')
 
-        #train_loader = dls.train
-        #val_loader = dls.val
+        train_loader = dataloader.train
+        classes = dataloader.vocab
 
-        dataset = torchvision.datasets.ImageNet
-        return dataset
+        # data set does not have a test set -> we use the validation set as our test set and split the training data
+        # into training and validation data
+        val_loader = dataloader.valid
+
+        dataset_lambda = lambda root, train, transform, download: ImagenetteDataset(classes, train_loader, val_loader, train=train, transform=transform)
+
+        return dataset_lambda
+
+    return None
 
 
+class ImagenetteDataset(Dataset):
+
+    def __init__(self, classes, train_loader, test_loader, train=True, transform=None):
+        self.classes = classes
+        self.train_loader = train_loader
+        self.test_loader = test_loader
+
+        self.train = train
+        self.transform = transform
+
+        self.data = [None] * self.__len__()
+        self.targets = [None] * self.__len__()
+        self._load_data()
+
+    def _load_data(self):
+        loader = self.train_loader if self.train else self.test_loader
+
+        for idx in range(self.__len__()):
+            sample, label = loader.dataset[idx]
+
+            sample = sample.resize((32, 32))
+
+            self.data[idx] = torch.from_numpy(np.array(sample)).float()
+            self.targets[idx] = label.item()
+
+        self.data = torch.stack(self.data, dim=0)
+
+    def __len__(self):
+        if self.train:
+            return len(self.train_loader.dataset)
+        else:
+            return len(self.test_loader.dataset)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        sample, label = self.data[idx], self.targets[idx]
+
+        if self.transform:
+            sample = sample.numpy()
+            sample = self.transform(sample)
+
+        return sample, label
 
 
 if __name__ == "__main__":
