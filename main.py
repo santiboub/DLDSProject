@@ -1,4 +1,5 @@
 import argparse
+import gc
 import json
 import os.path
 import pickle
@@ -91,6 +92,8 @@ def compute_metrics(model, dataloader, loss_function=nn.CrossEntropyLoss()):
                     correct_pred[classes[label]] += 1
                 total_pred[classes[label]] += 1
 
+            del images, labels, predicted
+
     network_loss = running_loss / num_batches
     network_accuracy = (float(correct) / total) * 100
 
@@ -178,7 +181,8 @@ def load_data(
     transform_test = []
 
     if upsampling:
-        transform_train.append(transforms.Resize(224))
+        transform_train.append(transforms.Resize((64, 64)))
+        transform_test.append(transforms.Resize((64, 64)))
 
     if base_augmentation:
         transform_train.append(transforms.RandomCrop(32, padding=4))
@@ -230,7 +234,6 @@ def load_data(
     )
 
     validation_size = int(len(trainset) * .1)
-    print(validation_size)
     trainset, valset = torch.utils.data.random_split(trainset, [len(trainset) - validation_size, validation_size])
 
     trainloader = torch.utils.data.DataLoader(
@@ -565,6 +568,10 @@ if __name__ == "__main__":
                 current_loss = loss_function(prediction, labels)
                 current_loss.backward()
                 optimizer.step()
+
+                del images, labels, prediction
+                torch.cuda.empty_cache()
+                gc.collect()
             
             with torch.no_grad():
                 model.eval()
