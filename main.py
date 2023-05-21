@@ -219,6 +219,8 @@ def load_data(base_augmentation=False, random_augmentation=False, norm_m0_sd1=Fa
         download=True
     )
 
+    validation_size = int(len(trainset) * .1)
+    print(validation_size)
     trainset, valset = torch.utils.data.random_split(trainset, [len(trainset) - validation_size, validation_size])
 
     trainloader = torch.utils.data.DataLoader(
@@ -409,10 +411,10 @@ class ImagenetteDataset(Dataset):
 
             sample = sample.resize((32, 32))
 
-            self.data[idx] = torch.from_numpy(np.array(sample)).float()
+            self.data[idx] = np.array(sample)
             self.targets[idx] = label.item()
 
-        self.data = torch.stack(self.data, dim=0)
+        self.data = np.stack(self.data, axis=0)
 
     def __len__(self):
         if self.train:
@@ -427,14 +429,12 @@ class ImagenetteDataset(Dataset):
         sample, label = self.data[idx], self.targets[idx]
 
         if self.transform:
-            sample = sample.numpy()
             sample = self.transform(sample)
 
         return sample, label
 
 
 if __name__ == "__main__":
-    validation_size = 5000
     args = parse_arguments()
     batch_size = args.batch_size
 
