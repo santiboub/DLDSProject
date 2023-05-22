@@ -301,6 +301,8 @@ def parse_arguments():
                                     help="apply augmentation on the training data")
     augmentation_group.add_argument("-ra", "--apply_random_augmentation", action="store_true",
                                     help="apply random augmentation on the training data")
+    augmentation_group.add_argument("-sk", "--small_kernel", action="store_true",
+                                    help="Use small kernel size for the first convolutional layer")
 
     parser.add_argument("-n", "--norm_m0_sd1", action="store_true",
                         help="Normalize to have 0 mean and standard deviation 1")
@@ -349,14 +351,14 @@ def get_model(device, args, classes):
         model = ResNet34(num_classes=len(classes), dropout=args.dropout, k_list=k_list)
     elif args.resnet_model_squeeze_excitation:
         print("Using ResNet model with SqueezeExcitation blocks...")
-        model = SENet34(num_classes=len(classes))
+        model = SENet34(num_classes=len(classes), small_kernel=args.small_kernel)
     elif args.resnet_model_squeeze_excitation_bottleneck:
         print("Using ResNet model with SqueezeExcitation blocks with bottleneck...")
         model = SENetBottleneck34(num_classes=len(classes))
     elif args.resnet_model_squeeze_excitation_adjustable:
         print("Using ResNet model with SqueezeExcitation blocks with bottleneck, adjustable residual connection...")
         k_list = [1.0, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8]
-        model = SENet34(num_classes=len(classes), dropout=args.dropout, k_list=k_list)
+        model = SENet34(num_classes=len(classes), dropout=args.dropout, k_list=k_list, small_kernel=args.small_kernel)
     elif args.resnet_pytorch:
         print("Using pre-defined ResNet model from PyTorch...")
         model = torchvision.models.resnet34()
