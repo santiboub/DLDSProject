@@ -1,0 +1,68 @@
+Using cuda:0...
+Using ResNet model...
+Total number of parameters: 21289802
+Using Symmetric Cross Entropy Loss...
+Training the network for 100 ...
+Using ReduceLROnPlateau scheduler...
+Training loss: 5.072831890799782, Validation loss: 6.675551414489746, current learning rate: 0.1
+Training loss: 3.2426554506475274, Validation loss: 4.2693711916605634, current learning rate: 0.1
+Training loss: 3.755488243970004, Validation loss: 4.801870028177897, current learning rate: 0.1
+Training loss: 2.8608045361258765, Validation loss: 3.881778875986735, current learning rate: 0.1
+Training loss: 7.885268254713579, Validation loss: 9.90419626235962, current learning rate: 0.1
+Training loss: 5.187611608794241, Validation loss: 6.456499894460042, current learning rate: 0.1
+Training loss: 3.3605067946694116, Validation loss: 4.323753277460734, current learning rate: 0.1
+Training loss: 5.3762616677717725, Validation loss: 7.192125956217448, current learning rate: 0.1
+Training loss: 5.328054659294359, Validation loss: 6.985521952311198, current learning rate: 0.1
+Epoch 00018: reducing learning rate of group 0 to 1.0000e-02.
+Training loss: 2.4477714119535503, Validation loss: 3.252937078475952, current learning rate: 0.010000000000000002
+Training loss: 2.459643761316935, Validation loss: 3.3741435209910073, current learning rate: 0.010000000000000002
+Training loss: 2.2821661450646142, Validation loss: 3.227407614390055, current learning rate: 0.010000000000000002
+Training loss: 2.1269067742607812, Validation loss: 3.2701332569122314, current learning rate: 0.010000000000000002
+Training loss: 2.095281579277732, Validation loss: 3.1385807196299234, current learning rate: 0.010000000000000002
+Training loss: 1.8661672852256082, Validation loss: 2.9680676460266113, current learning rate: 0.010000000000000002
+Training loss: 1.9006402528647222, Validation loss: 3.2954976558685303, current learning rate: 0.010000000000000002
+Training loss: 2.235832022898125, Validation loss: 3.6145530541737876, current learning rate: 0.010000000000000002
+Training loss: 1.9240158182201963, Validation loss: 3.475346803665161, current learning rate: 0.010000000000000002
+Training loss: 1.8764711582299434, Validation loss: 3.522467056910197, current learning rate: 0.010000000000000002
+Training loss: 1.8171544616872615, Validation loss: 3.4751468499501548, current learning rate: 0.010000000000000002
+Epoch 00040: reducing learning rate of group 0 to 1.0000e-03.
+Training loss: 1.4755069848262903, Validation loss: 3.1797777811686196, current learning rate: 0.0010000000000000002
+Training loss: 1.323442943168409, Validation loss: 3.053050994873047, current learning rate: 0.0010000000000000002
+Training loss: 1.2461679017905034, Validation loss: 3.0235833326975503, current learning rate: 0.0010000000000000002
+Training loss: 1.1592238942782085, Validation loss: 2.95748507976532, current learning rate: 0.0010000000000000002
+Training loss: 1.0722401972972986, Validation loss: 2.8962850173314414, current learning rate: 0.0010000000000000002
+Testing the network after epoch: 50...
+Test loss: 2.3361063559850055, Test accuracy: 57.732484076433124
+{"n01440764": 71.31782945736434, "n02102040": 68.60759493670886, "n02979186": 64.14565826330532, "n03000684": 14.248704663212436, "n03028079": 62.10268948655257, "n03394916": 57.61421319796954, "n03417042": 68.12339331619538, "n03425413": 46.77804295942721, "n03445777": 54.13533834586466, "n03888257": 71.02564102564102}
+Training loss: 0.9972403464895306, Validation loss: 2.879362146059672, current learning rate: 0.0010000000000000002
+Training loss: 0.9518203374111291, Validation loss: 2.9349618752797446, current learning rate: 0.0010000000000000002
+Training loss: 0.9339302651809923, Validation loss: 3.0351420243581138, current learning rate: 0.0010000000000000002
+Training loss: 0.9134764355240446, Validation loss: 3.13692577679952, current learning rate: 0.0010000000000000002
+Training loss: 0.8838135220787742, Validation loss: 3.183251698811849, current learning rate: 0.0010000000000000002
+Training loss: 0.8402728031982075, Validation loss: 3.2280147870381675, current learning rate: 0.0010000000000000002
+Epoch 00062: reducing learning rate of group 0 to 1.0000e-04.
+Training loss: 0.8267979676073248, Validation loss: 3.23276948928833, current learning rate: 0.00010000000000000003
+Training loss: 0.8130106185421799, Validation loss: 3.2424643834431968, current learning rate: 0.00010000000000000003
+Training loss: 0.8127323497425426, Validation loss: 3.2496116161346436, current learning rate: 0.00010000000000000003
+Training loss: 0.8191643339214902, Validation loss: 3.2668073177337646, current learning rate: 0.00010000000000000003
+Training loss: 0.8105210354833892, Validation loss: 3.260332187016805, current learning rate: 0.00010000000000000003
+Training loss: 0.7938487353650007, Validation loss: 3.259873708089193, current learning rate: 0.00010000000000000003
+Epoch 00073: reducing learning rate of group 0 to 1.0000e-05.
+Training loss: 0.8092308794007157, Validation loss: 3.263030767440796, current learning rate: 1.0000000000000004e-05
+Training loss: 0.8042468482797797, Validation loss: 3.2747700214385986, current learning rate: 1.0000000000000004e-05
+Training loss: 0.8051123023033142, Validation loss: 3.237426996231079, current learning rate: 1.0000000000000004e-05
+Training loss: 0.8134601992188077, Validation loss: 3.2822465101877847, current learning rate: 1.0000000000000004e-05
+Training loss: 0.7982918186621233, Validation loss: 3.2745949427286782, current learning rate: 1.0000000000000004e-05
+Epoch 00084: reducing learning rate of group 0 to 1.0000e-06.
+Training loss: 0.8133235555706602, Validation loss: 3.2711869875590005, current learning rate: 1.0000000000000004e-06
+Training loss: 0.8232325694777749, Validation loss: 3.2851545810699463, current learning rate: 1.0000000000000004e-06
+Training loss: 0.8047117961175514, Validation loss: 3.2446508407592773, current learning rate: 1.0000000000000004e-06
+Training loss: 0.8043816559242479, Validation loss: 3.2890937328338623, current learning rate: 1.0000000000000004e-06
+Training loss: 0.8072200661355798, Validation loss: 3.268086592356364, current learning rate: 1.0000000000000004e-06
+Training loss: 0.8006364703178406, Validation loss: 3.2829750378926597, current learning rate: 1.0000000000000004e-06
+Epoch 00095: reducing learning rate of group 0 to 1.0000e-07.
+Training loss: 0.8003345736951539, Validation loss: 3.2989237308502197, current learning rate: 1.0000000000000005e-07
+Training loss: 0.7986557519797123, Validation loss: 3.2824783325195312, current learning rate: 1.0000000000000005e-07
+Testing the network after epoch: 100...
+Test loss: 2.6451398213704427, Test accuracy: 56.50955414012739
+{"n01440764": 67.70025839793281, "n02102040": 59.49367088607595, "n02979186": 63.30532212885154, "n03000684": 49.22279792746114, "n03028079": 53.0562347188264, "n03394916": 50.253807106598984, "n03417042": 64.78149100257069, "n03425413": 39.618138424821005, "n03445777": 51.62907268170426, "n03888257": 68.2051282051282}
