@@ -301,7 +301,7 @@ def parse_arguments():
                                     help="apply augmentation on the training data")
     augmentation_group.add_argument("-ra", "--apply_random_augmentation", action="store_true",
                                     help="apply random augmentation on the training data")
-    augmentation_group.add_argument("-sk", "--small_kernel", action="store_true",
+    parser.add_argument("-sk", "--small_kernel", action="store_true",
                                     help="Use small kernel size for the first convolutional layer")
 
     parser.add_argument("-n", "--norm_m0_sd1", action="store_true",
